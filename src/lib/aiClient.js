@@ -16,6 +16,10 @@ const USAR_PROXY = !import.meta.env.DEV;
 
 // parts pode misturar texto e arquivos (áudio/imagem) numa única chamada
 async function chamarGemini(parts) {
+  if (!USAR_PROXY && !API_KEY) {
+    throw new Error('VITE_GEMINI_API_KEY não configurada. Veja o arquivo .env.example.');
+  }
+
   const corpo = JSON.stringify({ contents: [{ parts }] });
 
   const resposta = USAR_PROXY
@@ -29,10 +33,6 @@ async function chamarGemini(parts) {
         headers: { 'Content-Type': 'application/json' },
         body: corpo,
       });
-
-  if (!USAR_PROXY && !API_KEY) {
-    throw new Error('VITE_GEMINI_API_KEY não configurada. Veja o arquivo .env.example.');
-  }
 
   if (!resposta.ok) {
     throw new Error(`Erro na API do Gemini: ${resposta.status}`);

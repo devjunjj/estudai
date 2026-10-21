@@ -23,6 +23,10 @@ export default function Exercises() {
     }
     gerarExercicios({ materia, quantidade: 5, contexto })
       .then(setExercicios)
+      .catch((erro) => {
+        console.error('Falha ao gerar exercícios:', erro);
+        setExercicios(null);
+      })
       .finally(() => setCarregando(false));
   }, [materia, contexto, navigate]);
 
