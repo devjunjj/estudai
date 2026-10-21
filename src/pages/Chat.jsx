@@ -269,7 +269,14 @@ export default function Chat() {
         </div>
       </form>
 
-      <NotesPanel materia={materia} aberto={notasAbertas} onFechar={() => setNotasAbertas(false)} />
+      {userId && (
+        <NotesPanel
+          userId={userId}
+          materia={materia}
+          aberto={notasAbertas}
+          onFechar={() => setNotasAbertas(false)}
+        />
+      )}
     </div>
   );
 }

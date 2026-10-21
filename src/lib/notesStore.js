@@ -1,32 +1,33 @@
-// Anotações são salvas por matéria, assim cada assunto tem seu próprio bloco de notas.
+// Anotações salvas por usuário + matéria: cada aluno tem seu próprio
+// bloco de notas para cada assunto, mesmo usando o mesmo navegador.
 
-function chave(materia) {
-  return `estudai_notas_${materia.trim().toLowerCase()}`;
+function chave(userId, materia) {
+  return `estudai_notas_${userId}_${materia.trim().toLowerCase()}`;
 }
 
-export function carregarNotas(materia) {
+export function carregarNotas(userId, materia) {
   try {
-    const bruto = localStorage.getItem(chave(materia));
+    const bruto = localStorage.getItem(chave(userId, materia));
     return bruto ? JSON.parse(bruto) : [];
   } catch {
     return [];
   }
 }
 
-export function salvarNota(materia, textoNota) {
-  const notas = carregarNotas(materia);
+export function salvarNota(userId, materia, textoNota) {
+  const notas = carregarNotas(userId, materia);
   const novaNota = {
     id: Date.now(),
     texto: textoNota,
     criadaEm: new Date().toISOString(),
   };
   const atualizadas = [novaNota, ...notas];
-  localStorage.setItem(chave(materia), JSON.stringify(atualizadas));
+  localStorage.setItem(chave(userId, materia), JSON.stringify(atualizadas));
   return atualizadas;
 }
 
-export function removerNota(materia, id) {
-  const atualizadas = carregarNotas(materia).filter((n) => n.id !== id);
-  localStorage.setItem(chave(materia), JSON.stringify(atualizadas));
+export function removerNota(userId, materia, id) {
+  const atualizadas = carregarNotas(userId, materia).filter((n) => n.id !== id);
+  localStorage.setItem(chave(userId, materia), JSON.stringify(atualizadas));
   return atualizadas;
 }

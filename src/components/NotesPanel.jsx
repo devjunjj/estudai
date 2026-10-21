@@ -1,19 +1,19 @@
 import { useState } from 'react';
 import { carregarNotas, salvarNota, removerNota } from '../lib/notesStore';
 
-export default function NotesPanel({ materia, aberto, onFechar }) {
-  const [notas, setNotas] = useState(() => carregarNotas(materia));
+export default function NotesPanel({ userId, materia, aberto, onFechar }) {
+  const [notas, setNotas] = useState(() => carregarNotas(userId, materia));
   const [rascunho, setRascunho] = useState('');
 
   function adicionar() {
     const texto = rascunho.trim();
     if (!texto) return;
-    setNotas(salvarNota(materia, texto));
+    setNotas(salvarNota(userId, materia, texto));
     setRascunho('');
   }
 
   function excluir(id) {
-    setNotas(removerNota(materia, id));
+    setNotas(removerNota(userId, materia, id));
   }
 
   if (!aberto) return null;
