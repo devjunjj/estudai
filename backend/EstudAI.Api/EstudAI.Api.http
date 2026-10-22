@@ -1,0 +1,16 @@
+@EstudAI.Api_HostAddress = http://localhost:5018
+@userId = usuario-teste
+
+### Listar anotações de uma matéria
+GET {{EstudAI.Api_HostAddress}}/api/notes?materia=Matemática
+X-User-Id: {{userId}}
+
+### Criar anotação
+POST {{EstudAI.Api_HostAddress}}/api/notes
+X-User-Id: {{userId}}
+Content-Type: application/json
+
+{
+  "materia": "Matemática",
+  "texto": "Derivada de x² é 2x"
+}
