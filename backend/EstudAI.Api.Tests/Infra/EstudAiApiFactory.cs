@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace EstudAI.Api.Tests.Infra;
@@ -16,9 +17,17 @@ public class EstudAiApiFactory : WebApplicationFactory<Program>
 {
     private readonly string _nomeBanco = $"estudai-testes-{Guid.NewGuid()}";
 
+    // Gemini falso, configurável em cada teste
+    public GeminiFalso Gemini { get; } = new();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
+        builder.ConfigureAppConfiguration((_, configuracao) =>
+            configuracao.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Gemini:ApiKey"] = "chave-de-teste",
+            }));
 
         builder.ConfigureTestServices(services =>
         {
@@ -26,6 +35,9 @@ public class EstudAiApiFactory : WebApplicationFactory<Program>
             var registroPostgres = services.Single(s => s.ServiceType == typeof(DbContextOptions<AppDbContext>));
             services.Remove(registroPostgres);
             services.AddDbContext<AppDbContext>(options => options.UseInMemoryDatabase(_nomeBanco));
+
+            // Troca o Gemini de verdade pelo falso
+            services.AddHttpClient("gemini").ConfigurePrimaryHttpMessageHandler(() => Gemini);
 
             // Usa a autenticação de teste como padrão
             services

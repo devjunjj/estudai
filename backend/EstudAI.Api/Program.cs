@@ -1,5 +1,7 @@
+using System.Threading.RateLimiting;
 using EstudAI.Api.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -65,14 +67,48 @@ builder.Services
 builder.Services.AddAuthorization();
 
 // ---------- CORS ----------
-// Libera o frontend React (Vite, porta 5173) para chamar a API.
+// Endereços do frontend que podem chamar a API. Em desenvolvimento vem do appsettings
+// (localhost:5173); no servidor, da variável de ambiente Cors__Origens__0, __1...
+var origensPermitidas = builder.Configuration.GetSection("Cors:Origens").Get<string[]>() ?? [];
 const string PoliticaFrontend = "Frontend";
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(PoliticaFrontend, policy =>
-        policy.WithOrigins("http://localhost:5173")
+        policy.WithOrigins(origensPermitidas)
               .AllowAnyHeader()
               .AllowAnyMethod());
+});
+
+// ---------- IA (Gemini) ----------
+// A chave da IA fica só no servidor (Gemini:ApiKey). O frontend nunca a vê.
+builder.Services.AddHttpClient("gemini", cliente =>
+{
+    cliente.BaseAddress = new Uri("https://generativelanguage.googleapis.com/");
+    cliente.Timeout = TimeSpan.FromSeconds(90);
+});
+
+// Limite de uso da IA: cada usuário pode fazer até 20 pedidos por minuto.
+// Protege a cota (e o bolso) caso alguém tente abusar do endpoint.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("ia", contexto =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: contexto.User.FindFirst("sub")?.Value ?? contexto.Connection.RemoteIpAddress?.ToString() ?? "anonimo",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 20,
+                Window = TimeSpan.FromMinutes(1),
+            }));
+});
+
+// No Render (e na maioria das nuvens) a API fica atrás de um proxy que cuida do HTTPS.
+// Isso faz a API enxergar o protocolo e o IP originais da requisição.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
 });
 
 // ---------- Controllers e Swagger ----------
@@ -110,11 +146,15 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+app.UseForwardedHeaders();
 app.UseCors(PoliticaFrontend);
 app.UseAuthentication(); // 1º: descobre QUEM é o usuário (lê e valida o token)
 app.UseAuthorization();  // 2º: decide se ele PODE acessar o endpoint
+app.UseRateLimiter();    // 3º: aplica o limite de uso por usuário
 app.MapControllers();
+
+// Usado pelo Render para saber se a API está no ar
+app.MapGet("/saude", () => Results.Ok(new { status = "ok" }));
 
 app.Run();
 

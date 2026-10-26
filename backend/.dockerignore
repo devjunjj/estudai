@@ -1,0 +1,4 @@
+**/bin/
+**/obj/
+EstudAI.Api.Tests/
+**/*.user

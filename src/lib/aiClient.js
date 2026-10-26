@@ -1,45 +1,15 @@
 // Ponto único de integração com a IA.
 //
-// Em DESENVOLVIMENTO (npm run dev): chama o Gemini direto do navegador,
-// usando a chave em VITE_GEMINI_API_KEY do seu .env local — só pra facilitar
-// o teste no seu próprio computador.
-//
-// Em PRODUÇÃO (site publicado na Vercel): chama a função serverless em
-// /api/gemini.js, que guarda a chave real no servidor (GEMINI_API_KEY,
-// configurada só no painel da Vercel). Assim a chave nunca aparece no
-// código que roda no navegador de quem visita o site.
+// O navegador NÃO fala com o Gemini: ele chama a API em C# (POST /api/ia/gerar),
+// que exige login, limita o número de pedidos por minuto e guarda a chave da IA
+// só no servidor. Aqui ficam apenas os prompts de cada funcionalidade.
 
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-const MODEL = 'gemini-3.5-flash-lite';
-const BASE_URL_DIRETO = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
-const USAR_PROXY = !import.meta.env.DEV;
+import { iaApi } from './api';
 
-// parts pode misturar texto e arquivos (áudio/imagem) numa única chamada
-async function chamarGemini(parts) {
-  if (!USAR_PROXY && !API_KEY) {
-    throw new Error('VITE_GEMINI_API_KEY não configurada. Veja o arquivo .env.example.');
-  }
-
-  const corpo = JSON.stringify({ contents: [{ parts }] });
-
-  const resposta = USAR_PROXY
-    ? await fetch('/api/gemini', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: corpo,
-      })
-    : await fetch(`${BASE_URL_DIRETO}?key=${API_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: corpo,
-      });
-
-  if (!resposta.ok) {
-    throw new Error(`Erro na API do Gemini: ${resposta.status}`);
-  }
-
-  const dados = await resposta.json();
-  return dados.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+// arquivo (opcional): { mimeType, dadosBase64 } para áudio
+async function chamarIA(prompt, arquivo = null) {
+  const { texto } = await iaApi.gerar(prompt, arquivo);
+  return texto ?? '';
 }
 
 // Como a IA deve escrever em cada estilo escolhido pelo aluno
@@ -75,7 +45,7 @@ ${REGRAS_GERAIS}
 ${contexto}
 Tutor:`;
 
-  return chamarGemini([{ text: prompt }]);
+  return chamarIA(prompt);
 }
 
 export async function gerarExercicios({ materia, quantidade = 5, contexto = '' }) {
@@ -92,7 +62,7 @@ Responda SOMENTE em JSON válido, no formato:
 [{"pergunta": "...", "alternativas": ["...", "...", "..."], "correta": 0, "topico": "..."}]
 Sem markdown, sem texto adicional, apenas o JSON.`;
 
-  const textoResposta = await chamarGemini([{ text: prompt }]);
+  const textoResposta = await chamarIA(prompt);
   const limpo = textoResposta.replace(/```json|```/g, '').trim();
   return JSON.parse(limpo);
 }
@@ -112,7 +82,7 @@ ${texto}
 
 Resumo claro:`;
 
-  return chamarGemini([{ text: prompt }]);
+  return chamarIA(prompt);
 }
 
 // Transcreve e explica um arquivo de áudio enviado pelo aluno.
@@ -125,8 +95,5 @@ como se estivesse ensinando um aluno. Estruture a resposta em duas partes:
 "Transcrição:" e "Explicação:". Na explicação, siga este tamanho:
 ${INSTRUCOES_ESTILO[estilo] ?? INSTRUCOES_ESTILO.equilibrado}`;
 
-  return chamarGemini([
-    { text: prompt },
-    { inline_data: { mime_type: mimeType, data: arquivoBase64 } },
-  ]);
+  return chamarIA(prompt, { mimeType, dadosBase64: arquivoBase64 });
 }

@@ -24,7 +24,6 @@ Aplicação full stack: frontend em React (PWA instalável no celular) e API em 
 | Banco de dados | PostgreSQL (Supabase) com Entity Framework Core e migrations |
 | Autenticação | Supabase Auth + validação de JWT na API (JwtBearer) |
 | IA | Google Gemini API |
-| Proxy da IA | Função serverless na Vercel (`/api/gemini`) |
 | PWA | vite-plugin-pwa |
 | Testes | xUnit, WebApplicationFactory, EF Core InMemory |
 | Qualidade | Oxlint |
@@ -36,15 +35,12 @@ Navegador (React)
    │
    ├── Supabase Auth ........ login, cadastro e sessão
    │
-   ├── API ASP.NET Core ..... CRUD de anotações (/api/notes)
-   │      └── PostgreSQL (EF Core)
-   │
-   └── /api/gemini (Vercel) . função serverless que guarda a chave da IA
-          │
-          └── Google Gemini API
+   └── API ASP.NET Core (JWT) ... anotações e IA
+          ├── PostgreSQL (EF Core) .... /api/notes
+          └── Google Gemini ........... /api/ia/gerar (limite de 20 pedidos/min por usuário)
 ```
 
-**Por que a função serverless?** Se o React chamasse o Gemini direto, a chave da API ficaria visível no código que roda no navegador, e qualquer pessoa poderia copiá-la. Em produção o frontend chama `/api/gemini`, e só o servidor conhece a chave (variável `GEMINI_API_KEY`). Em desenvolvimento, para facilitar os testes locais, a chamada é direta usando a chave do `.env`.
+**Por que a IA passa pela API?** Se o React chamasse o Gemini direto, a chave ficaria visível no navegador e qualquer pessoa poderia usá-la. Por isso o frontend chama `POST /api/ia/gerar` na API em C#, que exige login (JWT), aplica um limite de pedidos por minuto para cada usuário (rate limiting nativo do ASP.NET Core) e guarda a chave só no servidor.
 
 Toda a comunicação com a IA está concentrada em `src/lib/aiClient.js`, então trocar de modelo ou de provedor exige mudar só esse arquivo.
 
@@ -54,16 +50,15 @@ Toda a comunicação com a IA está concentrada em `src/lib/aiClient.js`, então
 
 ```
 backend/EstudAI.Api/
-  Controllers/           endpoints REST (NotesController)
+  Controllers/           endpoints REST (NotesController, IaController)
   Models/                entidades do banco
   Dtos/                  contratos de entrada e saída, com validação
   Data/                  AppDbContext (Entity Framework Core)
   Migrations/            histórico de alterações do banco
 backend/EstudAI.Api.Tests/
-  NotesControllerTests.cs  testes de integração da API
-  Infra/                 API em memória para os testes (banco e login de teste)
-api/
-  gemini.js              função serverless (proxy seguro para o Gemini)
+  NotesControllerTests.cs, IaControllerTests.cs  testes de integração da API
+  Infra/                 API em memória para os testes (banco, login e Gemini falsos)
+backend/Dockerfile       imagem da API para publicar na nuvem
 src/
   pages/                 telas: Login, Home, NewChat, Chat, Exercises, Performance
   components/            componentes reutilizáveis (NotesPanel)
@@ -86,13 +81,14 @@ npm install
 cp .env.example .env    # no Windows: copy .env.example .env
 ```
 
-Preencha o `.env` com a URL e a chave do seu projeto Supabase e a sua chave do Gemini.
+Preencha o `.env` com a URL e a chave do seu projeto Supabase.
 
 **API (C#):** configure a connection string do PostgreSQL (no Supabase: *Connect → Direct → .NET → Session pooler*), crie as tabelas e suba a API:
 
 ```bash
 cd backend/EstudAI.Api
 dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=...;Port=5432;Database=postgres;Username=...;Password=...;SSL Mode=Require"
+dotnet user-secrets set "Gemini:ApiKey" "sua_chave_do_google_ai_studio"
 dotnet tool install --global dotnet-ef --version 8.0.11
 dotnet ef database update
 dotnet run
@@ -115,7 +111,7 @@ cd backend
 dotnet test
 ```
 
-São testes de integração com xUnit: a API sobe inteira em memória (`WebApplicationFactory`), com banco em memória e um login de teste no lugar do Supabase, e cada teste faz requisições HTTP de verdade. Eles cobrem acesso sem login (401), validação (400), criação, edição e exclusão, filtro por matéria e, principalmente, o isolamento entre usuários: um aluno não consegue ver nem apagar a nota de outro.
+São testes de integração com xUnit: a API sobe inteira em memória (`WebApplicationFactory`), com banco em memória, um login de teste no lugar do Supabase e um Gemini falso, e cada teste faz requisições HTTP de verdade. Eles cobrem acesso sem login (401), validação (400), CRUD de anotações, filtro por matéria, isolamento entre usuários, falhas da IA (502) e o limite de uso (429).
 
 ## Próximos passos
 

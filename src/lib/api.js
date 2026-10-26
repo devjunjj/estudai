@@ -34,8 +34,13 @@ async function requisicao(caminho, { metodo = 'GET', corpo } = {}) {
   if (resposta.status === 401) {
     throw new Error('Sessão inválida ou expirada. Faça login novamente.');
   }
+  if (resposta.status === 429) {
+    throw new Error('Muitos pedidos em pouco tempo. Espere um minuto e tente de novo.');
+  }
   if (!resposta.ok) {
-    throw new Error(`Erro na API: ${resposta.status}`);
+    // a API manda { mensagem } nos erros que ela mesma trata (ex.: IA fora do ar)
+    const corpo = await resposta.json().catch(() => null);
+    throw new Error(corpo?.mensagem ?? `Erro na API: ${resposta.status}`);
   }
 
   // 204 No Content (ex.: DELETE) não tem corpo
@@ -49,4 +54,10 @@ export const notasApi = {
     requisicao('/api/notes', { metodo: 'POST', corpo: { materia, texto } }),
 
   excluir: (id) => requisicao(`/api/notes/${id}`, { metodo: 'DELETE' }),
+};
+
+// A IA é chamada pela API (que guarda a chave e exige login), nunca direto pelo navegador
+export const iaApi = {
+  gerar: (prompt, arquivo = null) =>
+    requisicao('/api/ia/gerar', { metodo: 'POST', corpo: { prompt, arquivo } }),
 };
