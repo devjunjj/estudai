@@ -4,7 +4,8 @@
 
 import { supabase } from './supabaseClient';
 
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:5018';
+// Primeiro "pedaço" do valor, sem barra no final (protege contra espaço ou linha a mais na variável)
+const API_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:5018').trim().split(/\s+/)[0].replace(/\/+$/, '');
 
 // Token JWT da sessão atual do Supabase. A API valida esse token
 // e descobre sozinha quem é o usuário — o frontend não informa o id.
