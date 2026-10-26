@@ -224,7 +224,14 @@ export default function Chat() {
           </div>
         ))}
         {carregando && (
-          <div style={{ alignSelf: 'flex-start', fontSize: 12, color: 'var(--text-muted)' }}>Digitando...</div>
+          <div className="indicador-pensando" role="status" aria-live="polite">
+            <span>Pensando</span>
+            <span className="pontos-pensando" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </span>
+          </div>
         )}
         <div ref={fimRef} />
       </div>
