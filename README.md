@@ -22,7 +22,7 @@ Aplicação full stack: frontend em React (PWA instalável no celular) e API em 
 | Frontend | React 19, Vite, React Router |
 | Backend | C# / ASP.NET Core 8 (Web API com controllers) |
 | Banco de dados | PostgreSQL (Supabase) com Entity Framework Core e migrations |
-| Autenticação | Supabase Auth |
+| Autenticação | Supabase Auth + validação de JWT na API (JwtBearer) |
 | IA | Google Gemini API |
 | Proxy da IA | Função serverless na Vercel (`/api/gemini`) |
 | PWA | vite-plugin-pwa |
@@ -47,7 +47,7 @@ Navegador (React)
 
 Toda a comunicação com a IA está concentrada em `src/lib/aiClient.js`, então trocar de modelo ou de provedor exige mudar só esse arquivo.
 
-**Segurança dos dados:** toda consulta da API filtra pelo usuário, então um aluno nunca acessa as anotações de outro. A connection string do banco fica no *user-secrets* do .NET (fora do repositório), e as tabelas têm RLS ativado no Supabase, bloqueando acesso direto pela chave pública.
+**Segurança dos dados:** a API exige o token JWT gerado pelo Supabase no login (`Authorization: Bearer ...`). A assinatura é conferida com as chaves públicas do Supabase (JWKS), junto com emissor, audiência e validade, e o id do usuário é lido do próprio token (claim `sub`). Assim ninguém consegue se passar por outro usuário, e toda consulta filtra pelo dono dos dados. A connection string do banco fica no *user-secrets* do .NET (fora do repositório), e as tabelas têm RLS ativado no Supabase, bloqueando acesso direto pela chave pública.
 
 ## Estrutura de pastas
 
@@ -109,7 +109,7 @@ Acesse http://localhost:5173, crie uma conta e escolha uma matéria.
 - [x] API própria em **C# / ASP.NET Core** com CRUD de anotações
 - [x] Banco de dados **PostgreSQL** com Entity Framework Core e migrations
 - [ ] Migrar conversas e desempenho do `localStorage` para a API
-- [ ] Validação do token JWT do Supabase na API
+- [x] Autenticação na API com o token JWT do Supabase
 - [ ] Testes automatizados (xUnit no backend)
 - [ ] Docker e deploy em nuvem
 

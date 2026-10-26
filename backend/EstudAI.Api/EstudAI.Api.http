@@ -1,13 +1,17 @@
 @EstudAI.Api_HostAddress = http://localhost:5018
-@userId = usuario-teste
+# Cole aqui o access_token do Supabase (veja o README)
+@token = COLE_O_TOKEN_AQUI
+
+### Sem token: deve responder 401
+GET {{EstudAI.Api_HostAddress}}/api/notes?materia=Matemática
 
 ### Listar anotações de uma matéria
 GET {{EstudAI.Api_HostAddress}}/api/notes?materia=Matemática
-X-User-Id: {{userId}}
+Authorization: Bearer {{token}}
 
 ### Criar anotação
 POST {{EstudAI.Api_HostAddress}}/api/notes
-X-User-Id: {{userId}}
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {

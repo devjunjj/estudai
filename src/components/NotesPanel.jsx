@@ -17,7 +17,7 @@ export default function NotesPanel({ userId, materia, aberto, onFechar }) {
     setErro('');
 
     notasApi
-      .listar(userId, materia)
+      .listar(materia)
       .then((dados) => !cancelado && setNotas(dados))
       .catch((e) => !cancelado && setErro(e.message))
       .finally(() => !cancelado && setCarregando(false));
@@ -34,7 +34,7 @@ export default function NotesPanel({ userId, materia, aberto, onFechar }) {
     setSalvando(true);
     setErro('');
     try {
-      const nova = await notasApi.criar(userId, materia, texto);
+      const nova = await notasApi.criar(materia, texto);
       setNotas((atuais) => [nova, ...atuais]);
       setRascunho('');
     } catch (e) {
@@ -47,7 +47,7 @@ export default function NotesPanel({ userId, materia, aberto, onFechar }) {
   async function excluir(id) {
     setErro('');
     try {
-      await notasApi.excluir(userId, id);
+      await notasApi.excluir(id);
       setNotas((atuais) => atuais.filter((n) => n.id !== id));
     } catch (e) {
       setErro(e.message);
