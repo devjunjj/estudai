@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ChartColumn, ListChecks, MessageCircle } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
+import { Logo } from '../components/AppLayout';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -21,7 +23,7 @@ export default function Login() {
       if (modoCadastro) {
         const { error } = await supabase.auth.signUp({ email, password: senha });
         if (error) throw error;
-        setMensagem('Conta criada! Verifique seu e-mail pra confirmar antes de entrar.');
+        setMensagem('Conta criada! Verifique seu e-mail para confirmar antes de entrar.');
         setModoCadastro(false);
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password: senha });
@@ -43,73 +45,101 @@ export default function Login() {
     setErro('');
     const { error } = await supabase.auth.resetPasswordForEmail(email);
     if (error) setErro(traduzErro(error.message));
-    else setMensagem('Enviamos um link de redefinição de senha pro seu e-mail.');
+    else setMensagem('Enviamos um link de redefinição de senha para o seu e-mail.');
+  }
+
+  function alternarModo() {
+    setModoCadastro(!modoCadastro);
+    setErro('');
+    setMensagem('');
   }
 
   return (
-    <div className="screen">
-      <div className="header-blue" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-        <div className="logo-badge">⚡</div>
-        <h1 style={{ fontSize: 19, fontWeight: 600, margin: '12px 0 4px' }}>EstudAI</h1>
-        <p style={{ fontSize: 13, opacity: 0.85, margin: 0 }}>Aprenda no seu ritmo</p>
-      </div>
+    <div className="login">
+      <section className="login-marca">
+        <Logo />
+        <div>
+          <h1 className="login-chamada">Estude qualquer matéria no seu ritmo.</h1>
+          <ul className="login-vantagens">
+            <li>
+              <span className="icone"><MessageCircle size={19} aria-hidden="true" /></span>
+              Um tutor que explica do jeito que você prefere
+            </li>
+            <li>
+              <span className="icone"><ListChecks size={19} aria-hidden="true" /></span>
+              Exercícios gerados a partir do que você estudou
+            </li>
+            <li>
+              <span className="icone"><ChartColumn size={19} aria-hidden="true" /></span>
+              Acompanhe sua evolução e o que revisar
+            </li>
+          </ul>
+        </div>
+        <p className="login-rodape">Projeto pessoal de Jonas Vicente</p>
+      </section>
 
-      <form onSubmit={handleSubmit} className="conteudo-estreito" style={{ padding: '1.5rem 1.25rem', display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <p style={{ fontSize: 15, fontWeight: 600, margin: '0 0 14px' }}>
-          {modoCadastro ? 'Criar conta' : 'Entrar'}
-        </p>
-
-        <label className="field-label" htmlFor="email">E-mail</label>
-        <input
-          id="email"
-          type="email"
-          className="text-input"
-          placeholder="voce@email.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          style={{ marginBottom: 14 }}
-          required
-        />
-
-        <label className="field-label" htmlFor="senha">Senha</label>
-        <input
-          id="senha"
-          type="password"
-          className="text-input"
-          placeholder="••••••••"
-          value={senha}
-          onChange={(e) => setSenha(e.target.value)}
-          minLength={6}
-          style={{ marginBottom: 8 }}
-          required
-        />
-
-        {!modoCadastro && (
-          <div style={{ textAlign: 'right', marginBottom: 12 }}>
-            <button type="button" className="link-accent" style={{ fontSize: 12 }} onClick={handleEsqueciSenha}>
-              Esqueceu a senha?
-            </button>
+      <div className="login-formulario">
+        <form className="login-caixa" onSubmit={handleSubmit}>
+          <div className="login-logo-celular">
+            <Logo />
           </div>
-        )}
 
-        {erro && <p style={{ color: '#D0333F', fontSize: 12, margin: '0 0 10px' }}>{erro}</p>}
-        {mensagem && <p style={{ color: 'var(--blue-dark)', fontSize: 12, margin: '0 0 10px' }}>{mensagem}</p>}
+          <div>
+            <h2 className="pagina-titulo">{modoCadastro ? 'Criar conta' : 'Bem-vindo de volta'}</h2>
+            <p className="texto-suave" style={{ margin: '6px 0 0', fontSize: 15 }}>
+              {modoCadastro ? 'Leva menos de um minuto.' : 'Entre para continuar estudando.'}
+            </p>
+          </div>
 
-        <button type="submit" className="btn-primary" disabled={carregando} style={{ marginTop: modoCadastro ? 8 : 0, marginBottom: 12 }}>
-          {carregando ? 'Aguarde...' : modoCadastro ? 'Criar conta' : 'Entrar'}
-        </button>
+          <div className="campo">
+            <label className="campo-rotulo" htmlFor="email">E-mail</label>
+            <input
+              id="email"
+              type="email"
+              className="campo-texto"
+              placeholder="voce@email.com"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </div>
 
-        <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-secondary)' }}>
-          {modoCadastro ? 'Já tem conta?' : 'Não tem conta?'}{' '}
-          <button
-            type="button"
-            className="link-accent"
-            onClick={() => { setModoCadastro(!modoCadastro); setErro(''); setMensagem(''); }}
-          >
-            {modoCadastro ? 'Entrar' : 'Criar conta'}
+          <div className="campo">
+            <label className="campo-rotulo" htmlFor="senha">Senha</label>
+            <input
+              id="senha"
+              type="password"
+              className="campo-texto"
+              placeholder="Mínimo de 6 caracteres"
+              autoComplete={modoCadastro ? 'new-password' : 'current-password'}
+              value={senha}
+              onChange={(e) => setSenha(e.target.value)}
+              minLength={6}
+              required
+            />
+            {!modoCadastro && (
+              <button type="button" className="btn-link" style={{ alignSelf: 'flex-end', fontSize: 13, minHeight: 32 }} onClick={handleEsqueciSenha}>
+                Esqueceu a senha?
+              </button>
+            )}
+          </div>
+
+          {erro && <p className="mensagem-erro" role="alert">{erro}</p>}
+          {mensagem && <p className="mensagem-ok" role="status">{mensagem}</p>}
+
+          <button type="submit" className="btn btn-primario btn-bloco" disabled={carregando}>
+            {carregando ? 'Aguarde…' : modoCadastro ? 'Criar conta' : 'Entrar'}
           </button>
-        </p>
-      </form>
+
+          <p className="login-alternar">
+            {modoCadastro ? 'Já tem conta?' : 'Não tem conta?'}{' '}
+            <button type="button" className="btn-link" onClick={alternarModo}>
+              {modoCadastro ? 'Entrar' : 'Criar conta'}
+            </button>
+          </p>
+        </form>
+      </div>
     </div>
   );
 }

@@ -1,128 +1,110 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabaseClient';
-import { getUserId } from '../lib/userIdentity';
-import { listarConversas } from '../lib/conversationsStore';
-import { alternarTema, temaAtualEhEscuro } from '../lib/theme';
+import { useNavigate, Link } from 'react-router-dom';
+import { ChevronRight, MessageCirclePlus } from 'lucide-react';
+import AppLayout, { BotaoSair, BotaoTema } from '../components/AppLayout';
+import Sequencia from '../components/Sequencia';
+import { calcularSequencia, classeMateria, siglaMateria } from '../lib/estudos';
+import { listarResultados } from '../lib/performanceStore';
+import { abrirConversa } from '../lib/navegacao';
+import { tituloConversa } from '../lib/formatacao';
 
-function tituloConversa(conversa) {
-  const primeiraDoAluno = conversa.mensagens.find((m) => m.autor === 'usuario' && m.texto);
-  if (!primeiraDoAluno) return 'Conversa recém-criada';
-  const texto = primeiraDoAluno.texto;
-  return texto.length > 48 ? texto.slice(0, 48) + '…' : texto;
+// Uma entrada por matéria: a conversa mais recente e a média nos exercícios
+function agruparMaterias(userId, conversas) {
+  const porMateria = new Map();
+  conversas.forEach((c) => {
+    const chave = c.materia.trim().toLowerCase();
+    if (!porMateria.has(chave)) porMateria.set(chave, c); // a lista já vem da mais recente para a mais antiga
+  });
+  return [...porMateria.values()].map((conversa) => {
+    const resultados = listarResultados(userId, conversa.materia);
+    const media = resultados.length
+      ? Math.round(resultados.reduce((soma, r) => soma + r.percentual, 0) / resultados.length)
+      : null;
+    return { conversa, media };
+  });
 }
 
-function resumo(conversa) {
-  const ultima = conversa.mensagens[conversa.mensagens.length - 1];
-  if (!ultima) return 'Toque pra continuar de onde parou';
-  const prefixo = ultima.autor === 'usuario' ? 'Você: ' : 'EstudAI: ';
-  const texto = ultima.texto.length > 72 ? ultima.texto.slice(0, 72) + '…' : ultima.texto;
-  return prefixo + texto;
-}
-
-function dataParte(iso) {
-  const data = new Date(iso);
-  const hoje = new Date();
-  const ontem = new Date(hoje);
-  ontem.setDate(hoje.getDate() - 1);
-  if (data.toDateString() === hoje.toDateString()) return 'Hoje';
-  if (data.toDateString() === ontem.toDateString()) return 'Ontem';
-  return data.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-}
-
-function horaParte(iso) {
-  return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-}
-
-export default function Home() {
+function ConteudoInicio({ usuario }) {
   const navigate = useNavigate();
-  const [conversas, setConversas] = useState([]);
-  const [carregando, setCarregando] = useState(true);
-  const [escuro, setEscuro] = useState(false);
+  if (usuario.carregando) return null;
 
-  useEffect(() => {
-    setEscuro(temaAtualEhEscuro());
-    getUserId().then((userId) => {
-      setConversas(listarConversas(userId));
-      setCarregando(false);
-    });
-  }, []);
-
-  function handleAlternarTema() {
-    setEscuro(alternarTema());
-  }
-
-  async function handleSair() {
-    await supabase.auth.signOut();
-    navigate('/login');
-  }
-
-  function abrirConversa(conversa) {
-    sessionStorage.setItem('estudai_conversa_id', conversa.id);
-    localStorage.setItem('estudai_materia', conversa.materia);
-    navigate('/chat');
-  }
+  const { userId, conversas } = usuario;
+  const ultima = conversas[0];
+  const materias = agruparMaterias(userId, conversas);
+  const sequencia = calcularSequencia(userId, conversas);
 
   return (
-    <div className="screen">
-      <div className="header-blue">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div className="logo-badge" style={{ width: 34, height: 34, fontSize: 16 }}>⚡</div>
-            <span style={{ fontWeight: 600, fontSize: 17 }}>EstudAI</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button
-              onClick={handleAlternarTema}
-              style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 8, color: '#fff', width: 30, height: 30, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              aria-label="Alternar tema"
-            >
-              {escuro ? '☀️' : '🌙'}
-            </button>
-            <button
-              onClick={handleSair}
-              style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 8, color: '#fff', fontSize: 11, padding: '6px 10px' }}
-            >
-              Sair
-            </button>
-          </div>
+    <div className="pagina">
+      <div className="pagina-topo">
+        <div>
+          <p className="pagina-subtitulo">Olá!</p>
+          <h1 className="pagina-titulo">O que vamos estudar hoje?</h1>
         </div>
-        <p style={{ fontSize: 13, opacity: 0.85, margin: '0 0 4px' }}>Bom te ver de novo</p>
-        <p style={{ fontSize: 19, fontWeight: 600, margin: 0 }}>Suas conversas</p>
+        <div className="so-celular" style={{ gap: 4 }}>
+          <BotaoTema />
+          <BotaoSair />
+        </div>
       </div>
 
-      <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', flex: 1 }}>
-        <button className="btn-primary" onClick={() => navigate('/nova')} style={{ marginBottom: 20 }}>
-          + Nova conversa
-        </button>
-
-        {carregando && (
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center' }}>Carregando...</p>
-        )}
-
-        {!carregando && conversas.length === 0 && (
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', marginTop: 20 }}>
-            Você ainda não tem conversas. Comece uma nova acima.
-          </p>
-        )}
-
-        <div className="lista-conversas">
-          {conversas.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => abrirConversa(c)}
-              className="card conversa-card"
-            >
-              <div className="conversa-card-topo">
-                <span className="materia-badge">📘 {c.materia}</span>
-                <span className="conversa-card-data">{dataParte(c.atualizadaEm)} · {horaParte(c.atualizadaEm)}</span>
-              </div>
-              <p className="conversa-card-titulo">{tituloConversa(c)}</p>
-              <p className="conversa-card-resumo">{resumo(c)}</p>
+      <div className="inicio-grade">
+        <div className="coluna">
+          {ultima ? (
+            <button type="button" className={`continuar ${classeMateria(ultima.materia)}`} onClick={() => abrirConversa(navigate, ultima)}>
+              <span className="sigla-materia" aria-hidden="true">{siglaMateria(ultima.materia)}</span>
+              <span className="continuar-textos">
+                <span className="sobretitulo">Continuar de onde parou</span>
+                <span className="continuar-titulo">{tituloConversa(ultima)}</span>
+                <span className="texto-suave" style={{ fontSize: 13 }}>{ultima.materia}</span>
+              </span>
+              <ChevronRight size={20} className="texto-suave" aria-hidden="true" />
             </button>
-          ))}
+          ) : (
+            <div className="cartao estado-vazio">
+              <span className="icone-circulo">
+                <MessageCirclePlus size={26} aria-hidden="true" />
+              </span>
+              <h2 className="secao-titulo">Comece sua primeira conversa</h2>
+              <p>Escolha uma matéria e pergunte o que quiser. O tutor explica no tamanho que você preferir.</p>
+              <Link to="/nova" className="btn btn-primario">Começar a estudar</Link>
+            </div>
+          )}
+
+          {materias.length > 0 && (
+            <section style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div className="secao-cabecalho">
+                <h2 className="secao-titulo">Suas matérias</h2>
+                <Link to="/conversas" className="btn-link" style={{ fontSize: 14 }}>Ver conversas</Link>
+              </div>
+              <div className="grade-materias">
+                {materias.map(({ conversa, media }) => (
+                  <button
+                    key={conversa.id}
+                    type="button"
+                    className={`cartao-materia ${classeMateria(conversa.materia)}`}
+                    onClick={() => abrirConversa(navigate, conversa)}
+                  >
+                    <span className="cartao-materia-icone" aria-hidden="true">{siglaMateria(conversa.materia)}</span>
+                    <span className="cartao-materia-nome">{conversa.materia}</span>
+                    <span className="cartao-materia-barra" aria-hidden="true">
+                      <span style={{ width: `${media ?? 0}%` }} />
+                    </span>
+                    <span className="cartao-materia-info">
+                      {media === null ? 'Sem exercícios ainda' : `${media}% de acertos`}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+
+        <div className="coluna inicio-lateral">
+          <Sequencia dados={sequencia} />
         </div>
       </div>
     </div>
   );
+}
+
+export default function Home() {
+  return <AppLayout>{(usuario) => <ConteudoInicio usuario={usuario} />}</AppLayout>;
 }

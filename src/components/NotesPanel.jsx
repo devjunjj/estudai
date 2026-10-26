@@ -1,18 +1,19 @@
 import { useEffect, useState } from 'react';
+import { Plus, Trash2 } from 'lucide-react';
 import { notasApi } from '../lib/api';
 
-export default function NotesPanel({ userId, materia, aberto, onFechar }) {
+// Anotações da matéria, salvas pela API em C#.
+// O componente só mostra o conteúdo: quem usa decide se fica no painel lateral (PC) ou numa gaveta.
+// `versao` muda quando outra parte da tela salva uma nota (ex.: "Salvar nas anotações" no chat)
+export default function NotesPanel({ userId, materia, mostrarTitulo = true, versao = 0 }) {
   const [notas, setNotas] = useState([]);
   const [rascunho, setRascunho] = useState('');
-  const [carregando, setCarregando] = useState(false);
+  const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
 
-  // Busca as notas na API sempre que o painel é aberto
   useEffect(() => {
-    if (!aberto) return;
-
-    let cancelado = false; // evita atualizar o estado se o painel fechar antes da resposta
+    let cancelado = false; // evita atualizar o estado se o componente sair da tela antes da resposta
     setCarregando(true);
     setErro('');
 
@@ -25,9 +26,10 @@ export default function NotesPanel({ userId, materia, aberto, onFechar }) {
     return () => {
       cancelado = true;
     };
-  }, [aberto, userId, materia]);
+  }, [userId, materia, versao]);
 
-  async function adicionar() {
+  async function adicionar(e) {
+    e.preventDefault();
     const texto = rascunho.trim();
     if (!texto) return;
 
@@ -54,84 +56,52 @@ export default function NotesPanel({ userId, materia, aberto, onFechar }) {
     }
   }
 
-  if (!aberto) return null;
-
   return (
-    <div
-      style={{
-        position: 'absolute',
-        inset: 0,
-        background: 'rgba(0,0,0,0.25)',
-        display: 'flex',
-        justifyContent: 'flex-end',
-        zIndex: 20,
-      }}
-      onClick={onFechar}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          width: '85%',
-          maxWidth: 340,
-          background: 'var(--surface)',
-          height: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          boxShadow: '-2px 0 12px rgba(0,0,0,0.08)',
-        }}
-      >
-        <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontWeight: 600, fontSize: 14 }}>Anotações · {materia}</span>
-          <button onClick={onFechar} style={{ background: 'none', border: 'none', fontSize: 18, color: 'var(--text-secondary)' }} aria-label="Fechar">
-            ✕
-          </button>
+    <section className="notas" aria-label="Anotações">
+      {mostrarTitulo && (
+        <div className="notas-cabecalho">
+          <h2>
+            Anotações <span className="notas-contagem">· {notas.length}</span>
+          </h2>
         </div>
+      )}
 
-        <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--border)' }}>
-          <textarea
-            className="text-input"
-            style={{ width: '100%', minHeight: 70, resize: 'vertical', marginBottom: 8 }}
-            placeholder="Anote algo importante..."
-            value={rascunho}
-            onChange={(e) => setRascunho(e.target.value)}
-          />
-          <button className="btn-primary" onClick={adicionar} disabled={!rascunho.trim() || salvando}>
-            {salvando ? 'Salvando...' : 'Salvar anotação'}
-          </button>
-          {erro && (
-            <p style={{ fontSize: 12, color: 'var(--danger-text)', margin: '8px 0 0' }}>{erro}</p>
-          )}
-        </div>
+      <form className="nova-nota" onSubmit={adicionar}>
+        <label htmlFor={`nova-nota-${mostrarTitulo ? 'painel' : 'gaveta'}`} className="so-leitor">
+          Nova anotação
+        </label>
+        <textarea
+          id={`nova-nota-${mostrarTitulo ? 'painel' : 'gaveta'}`}
+          className="campo-texto"
+          placeholder="Anote algo importante…"
+          value={rascunho}
+          onChange={(e) => setRascunho(e.target.value)}
+        />
+        <button type="submit" className="btn btn-suave" disabled={!rascunho.trim() || salvando}>
+          <Plus size={18} aria-hidden="true" />
+          {salvando ? 'Salvando…' : 'Salvar anotação'}
+        </button>
+        {erro && <p className="mensagem-erro">{erro}</p>}
+      </form>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {carregando && (
-            <p style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', marginTop: 20 }}>
-              Carregando anotações...
-            </p>
-          )}
-          {!carregando && notas.length === 0 && (
-            <p style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', marginTop: 20 }}>
-              Nenhuma anotação ainda.
-            </p>
-          )}
-          {notas.map((n) => (
-            <div key={n.id} className="card" style={{ position: 'relative' }}>
-              <p style={{ fontSize: 13, margin: 0, whiteSpace: 'pre-wrap' }}>{n.texto}</p>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                  {new Date(n.criadaEm).toLocaleDateString('pt-BR')}
-                </span>
-                <button
-                  onClick={() => excluir(n.id)}
-                  style={{ background: 'none', border: 'none', fontSize: 12, color: 'var(--text-muted)' }}
-                >
-                  Excluir
-                </button>
-              </div>
+      {carregando && <p className="notas-aviso">Carregando anotações…</p>}
+      {!carregando && notas.length === 0 && !erro && (
+        <p className="notas-aviso">Nenhuma anotação ainda. Salve aqui o que não pode esquecer.</p>
+      )}
+
+      <ul className="lista-notas">
+        {notas.map((n) => (
+          <li key={n.id} className="nota">
+            <p className="nota-texto">{n.texto}</p>
+            <div className="nota-rodape">
+              <span>{new Date(n.criadaEm).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</span>
+              <button type="button" onClick={() => excluir(n.id)}>
+                <Trash2 size={14} aria-hidden="true" /> Excluir
+              </button>
             </div>
-          ))}
-        </div>
-      </div>
-    </div>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

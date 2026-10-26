@@ -1,125 +1,162 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { getUserId } from '../lib/userIdentity';
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { ChartColumn } from 'lucide-react';
+import AppLayout from '../components/AppLayout';
+import { classeMateria } from '../lib/estudos';
 import { listarResultados } from '../lib/performanceStore';
 
-export default function Performance() {
+function nivel(percentual) {
+  if (percentual >= 70) return '';
+  if (percentual >= 40) return 'medio';
+  return 'baixo';
+}
+
+function classeTexto(percentual) {
+  if (percentual >= 70) return 'texto-sucesso';
+  if (percentual >= 40) return 'texto-alerta';
+  return 'texto-perigo';
+}
+
+function PainelDesempenho({ usuario }) {
   const navigate = useNavigate();
-  const materia = localStorage.getItem('estudai_materia');
-  const [resultados, setResultados] = useState(null);
+  const materias = [...new Set(usuario.conversas.map((c) => c.materia))];
+  const salva = localStorage.getItem('estudai_materia');
+  const [materia, setMateria] = useState(materias.includes(salva) ? salva : materias[0]);
 
-  useEffect(() => {
-    if (!materia) {
-      navigate('/', { replace: true });
-      return;
-    }
-    getUserId().then((userId) => {
-      setResultados(listarResultados(userId, materia));
-    });
-  }, [materia, navigate]);
+  if (materias.length === 0) {
+    return (
+      <div className="pagina estreita">
+        <h1 className="pagina-titulo">Desempenho</h1>
+        <div className="estado-vazio">
+          <span className="icone-circulo"><ChartColumn size={26} aria-hidden="true" /></span>
+          <p>Comece a estudar uma matéria e faça exercícios para acompanhar sua evolução aqui.</p>
+          <Link to="/nova" className="btn btn-primario">Começar a estudar</Link>
+        </div>
+      </div>
+    );
+  }
 
-  if (!materia || resultados === null) return null;
+  const resultados = listarResultados(usuario.userId, materia);
+  const total = resultados.length;
+  const media = total ? Math.round(resultados.reduce((s, r) => s + r.percentual, 0) / total) : 0;
+  const melhor = total ? Math.max(...resultados.map((r) => r.percentual)) : 0;
 
-  const totalRodadas = resultados.length;
-  const mediaGeral = totalRodadas > 0
-    ? Math.round(resultados.reduce((soma, r) => soma + r.percentual, 0) / totalRodadas)
-    : 0;
+  const contagem = {};
+  resultados.forEach((r) => (r.topicosErrados || []).forEach((t) => (contagem[t] = (contagem[t] || 0) + 1)));
+  const focar = Object.entries(contagem).sort((a, b) => b[1] - a[1]).slice(0, 5);
 
-  const contagemTopicos = {};
-  resultados.forEach((r) => {
-    (r.topicosErrados || []).forEach((t) => {
-      contagemTopicos[t] = (contagemTopicos[t] || 0) + 1;
-    });
-  });
-  const topicosParaFocar = Object.entries(contagemTopicos)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5);
+  function escolher(m) {
+    setMateria(m);
+    localStorage.setItem('estudai_materia', m);
+  }
+
+  function praticar() {
+    localStorage.setItem('estudai_materia', materia);
+    sessionStorage.setItem('estudai_exercicios_contexto', focar.length ? `Tópicos que o aluno mais erra: ${focar.map(([t]) => t).join(', ')}` : '');
+    const conversa = usuario.conversas.find((c) => c.materia === materia);
+    if (conversa) sessionStorage.setItem('estudai_conversa_id', conversa.id);
+    navigate('/exercicios');
+  }
 
   return (
-    <div className="screen" style={{ padding: '1.25rem' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
-        <button onClick={() => navigate('/')} style={{ background: 'none', border: 'none', fontSize: 18, color: 'var(--text-secondary)' }} aria-label="Voltar">←</button>
-        <span style={{ fontWeight: 600, fontSize: 14 }}>Desempenho · {materia}</span>
+    <div className="pagina">
+      <div className="pagina-topo">
+        <h1 className="pagina-titulo">Desempenho</h1>
+        <button type="button" className="btn btn-primario so-tablet-pc" onClick={praticar}>Praticar agora</button>
       </div>
 
-      {totalRodadas === 0 ? (
-        <div style={{ textAlign: 'center', marginTop: 60 }}>
-          <p style={{ fontSize: 32, marginBottom: 8 }}>📊</p>
-          <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-            Você ainda não fez exercícios em {materia}.<br />Faça uma rodada pra começar a ver sua evolução aqui.
-          </p>
+      <div className="filtros" role="group" aria-label="Escolher matéria">
+        {materias.map((m) => (
+          <button key={m} type="button" className={`pilula ${m === materia ? 'ativa' : 'contorno'}`} onClick={() => escolher(m)} aria-pressed={m === materia}>
+            {m}
+          </button>
+        ))}
+      </div>
+
+      {total === 0 ? (
+        <div className="cartao estado-vazio">
+          <span className="icone-circulo"><ChartColumn size={26} aria-hidden="true" /></span>
+          <p>Você ainda não fez exercícios de <strong>{materia}</strong>. Faça uma rodada para ver sua evolução.</p>
+          <button type="button" className="btn btn-primario" onClick={praticar}>Gerar exercícios</button>
         </div>
       ) : (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 24 }}>
-            <div className="card" style={{ textAlign: 'center' }}>
-              <p style={{ fontSize: 26, fontWeight: 700, color: 'var(--blue)', margin: 0 }}>{mediaGeral}%</p>
-              <p style={{ fontSize: 11, color: 'var(--text-secondary)', margin: '4px 0 0' }}>Média geral</p>
+          <div className="estatisticas">
+            <div className="cartao estatistica">
+              <strong>{media}%</strong>
+              <span>Média de acertos</span>
             </div>
-            <div className="card" style={{ textAlign: 'center' }}>
-              <p style={{ fontSize: 26, fontWeight: 700, color: 'var(--blue)', margin: 0 }}>{totalRodadas}</p>
-              <p style={{ fontSize: 11, color: 'var(--text-secondary)', margin: '4px 0 0' }}>
-                {totalRodadas === 1 ? 'Rodada feita' : 'Rodadas feitas'}
-              </p>
+            <div className="cartao estatistica">
+              <strong>{total}</strong>
+              <span>{total === 1 ? 'Rodada feita' : 'Rodadas feitas'}</span>
+            </div>
+            <div className="cartao estatistica">
+              <strong>{melhor}%</strong>
+              <span>Melhor resultado</span>
             </div>
           </div>
 
-          <p className="field-label" style={{ marginBottom: 10 }}>Evolução</p>
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 100, marginBottom: 6, padding: '0 2px' }}>
-            {resultados.map((r) => (
-              <div
-                key={r.id}
-                title={`${r.percentual}%`}
-                style={{
-                  flex: 1,
-                  height: `${Math.max(r.percentual, 4)}%`,
-                  background: r.percentual >= 70 ? 'var(--success)' : r.percentual >= 40 ? 'var(--warning)' : 'var(--danger)',
-                  borderRadius: '4px 4px 0 0',
-                  minWidth: 6,
-                }}
-              />
-            ))}
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 28 }}>
-            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-              {new Date(resultados[0].data).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
-            </span>
-            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-              {new Date(resultados[resultados.length - 1].data).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
-            </span>
-          </div>
+          <div className="desempenho-grade">
+            <section className={`cartao ${classeMateria(materia)}`} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <h2 className="secao-titulo">Evolução</h2>
+              <ul className="grafico-evolucao" aria-label="Percentual de acertos em cada rodada, da mais antiga para a mais recente">
+                {resultados.map((r) => (
+                  <li
+                    key={r.id}
+                    className={nivel(r.percentual)}
+                    style={{ height: `${Math.max(r.percentual, 4)}%` }}
+                    title={`${r.percentual}%`}
+                    aria-label={`${r.percentual}%`}
+                  />
+                ))}
+              </ul>
+              <div className="grafico-datas">
+                <span>{new Date(resultados[0].data).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</span>
+                <span>{new Date(resultados[total - 1].data).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</span>
+              </div>
+            </section>
 
-          {topicosParaFocar.length > 0 && (
-            <div className="card" style={{ marginBottom: 20 }}>
-              <p style={{ fontSize: 13, fontWeight: 600, margin: '0 0 10px' }}>📌 No que focar</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {topicosParaFocar.map(([topico, vezes]) => (
-                  <div key={topico} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{topico}</span>
-                    <span style={{ fontSize: 11, color: 'var(--danger-text)', fontWeight: 600 }}>
-                      {vezes} {vezes === 1 ? 'erro' : 'erros'}
+            <div className="coluna" style={{ gap: 16 }}>
+              {focar.length > 0 && (
+                <section className="cartao">
+                  <h2 className="secao-titulo" style={{ marginBottom: 6 }}>No que focar</h2>
+                  {focar.map(([topico, vezes]) => (
+                    <div key={topico} className="linha-topico">
+                      <span>{topico}</span>
+                      <span className="topico">{vezes} {vezes === 1 ? 'erro' : 'erros'}</span>
+                    </div>
+                  ))}
+                  <button type="button" className="btn btn-escuro btn-bloco" style={{ marginTop: 10 }} onClick={praticar}>
+                    Praticar esses tópicos
+                  </button>
+                </section>
+              )}
+
+              <section className="cartao">
+                <h2 className="secao-titulo" style={{ marginBottom: 4 }}>Histórico</h2>
+                {[...resultados].reverse().slice(0, 8).map((r) => (
+                  <div key={r.id} className="linha-historico">
+                    <span className="texto-suave">
+                      {new Date(r.data).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                     </span>
+                    <strong className={classeTexto(r.percentual)}>
+                      {r.acertos}/{r.total} · {r.percentual}%
+                    </strong>
                   </div>
                 ))}
-              </div>
+              </section>
             </div>
-          )}
-
-          <p className="field-label" style={{ marginBottom: 10 }}>Histórico de rodadas</p>
-          <div className="lista-cards">
-            {[...resultados].reverse().map((r) => (
-              <div key={r.id} className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                  {new Date(r.data).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                </span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: r.percentual >= 70 ? 'var(--success-text)' : r.percentual >= 40 ? 'var(--warning-text)' : 'var(--danger-text)' }}>
-                  {r.acertos}/{r.total} · {r.percentual}%
-                </span>
-              </div>
-            ))}
           </div>
         </>
       )}
     </div>
+  );
+}
+
+export default function Performance() {
+  return (
+    <AppLayout>
+      {(usuario) => (usuario.carregando ? null : <PainelDesempenho usuario={usuario} />)}
+    </AppLayout>
   );
 }

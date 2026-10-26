@@ -12,7 +12,7 @@ export default defineConfig({
         name: 'EstudAI',
         short_name: 'EstudAI',
         description: 'IA de estudos que se adapta à sua matéria e ao seu jeito de aprender',
-        theme_color: '#378ADD',
+        theme_color: '#2563EB',
         background_color: '#F4F6F9',
         display: 'standalone',
         start_url: '/',

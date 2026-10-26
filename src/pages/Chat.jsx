@@ -1,10 +1,38 @@
-import { useState, useRef, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
-import { askStudyAssistant, summarizeText, explainAudio } from '../lib/aiClient';
-import { getUserId } from '../lib/userIdentity';
-import { carregarConversa, salvarMensagens } from '../lib/conversationsStore';
+import {
+  ArrowLeft,
+  ArrowUp,
+  BookmarkPlus,
+  ChartColumn,
+  FileText,
+  ListChecks,
+  Maximize2,
+  Mic,
+  Minimize2,
+  NotebookPen,
+  Sparkles,
+} from 'lucide-react';
+import AppLayout from '../components/AppLayout';
+import Gaveta from '../components/Gaveta';
 import NotesPanel from '../components/NotesPanel';
+import { askStudyAssistant, explainAudio, summarizeText } from '../lib/aiClient';
+import { notasApi } from '../lib/api';
+import { carregarConversa, salvarEstilo, salvarMensagens } from '../lib/conversationsStore';
+import { classeMateria, registrarDiaDeEstudo } from '../lib/estudos';
+import { tituloConversa } from '../lib/formatacao';
+import { listarResultados } from '../lib/performanceStore';
+import { useMediaQuery } from '../lib/useMediaQuery';
+import {
+  ESTILOS,
+  ORDEM_ESTILOS,
+  estiloMaisCurto,
+  estiloMaisLongo,
+  salvarEstiloPreferido,
+} from '../lib/preferencias';
+
+const ERRO_IA = 'Não consegui responder agora. Tenta de novo em instantes.';
 
 function arquivoParaBase64(arquivo) {
   return new Promise((resolve, reject) => {
@@ -15,135 +43,220 @@ function arquivoParaBase64(arquivo) {
   });
 }
 
-export default function Chat() {
-  const navigate = useNavigate();
-  const conversaId = sessionStorage.getItem('estudai_conversa_id');
-  const inputTextoRef = useRef(null);
-  const inputAudioRef = useRef(null);
-  const fimRef = useRef(null);
+function mensagemInicial(materia) {
+  return {
+    autor: 'ia',
+    texto: `Vamos estudar **${materia}**! O que você já sabe sobre o tema, ou por onde quer começar?`,
+    boasVindas: true,
+  };
+}
 
-  const [userId, setUserId] = useState(null);
-  const [materia, setMateria] = useState(null);
-  const [mensagens, setMensagens] = useState([]);
+// Resumo do desempenho na matéria, mostrado no painel lateral do PC
+function ResumoDesempenho({ userId, materia, onPraticar }) {
+  const resultados = listarResultados(userId, materia);
+
+  if (resultados.length === 0) {
+    return (
+      <section className="resumo-desempenho">
+        <h2>Seu desempenho</h2>
+        <p>Faça uma rodada de exercícios para ver aqui seus acertos e o que vale revisar.</p>
+        <button type="button" className="btn btn-escuro btn-bloco" onClick={onPraticar}>
+          Gerar exercícios
+        </button>
+      </section>
+    );
+  }
+
+  const media = Math.round(resultados.reduce((soma, r) => soma + r.percentual, 0) / resultados.length);
+  const contagem = {};
+  resultados.forEach((r) => (r.topicosErrados || []).forEach((t) => (contagem[t] = (contagem[t] || 0) + 1)));
+  const revisar = Object.entries(contagem)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([t]) => t);
+
+  return (
+    <section className="resumo-desempenho">
+      <h2>Seu desempenho</h2>
+      <div className="numero-grande">
+        <strong>{media}%</strong> de acertos em {materia}
+      </div>
+      <div className="barra" aria-hidden="true">
+        <div className="barra-preenchida" style={{ width: `${media}%` }} />
+      </div>
+      {revisar.length > 0 && (
+        <>
+          <span style={{ fontSize: 13, fontWeight: 700 }}>Vale revisar</span>
+          <ul className="topicos">
+            {revisar.map((t) => (
+              <li key={t} className="topico">{t}</li>
+            ))}
+          </ul>
+        </>
+      )}
+      <button type="button" className="btn btn-escuro btn-bloco" onClick={onPraticar}>
+        {revisar.length > 0 ? 'Praticar esses tópicos' : 'Fazer mais exercícios'}
+      </button>
+    </section>
+  );
+}
+
+function ConversaDeEstudo({ userId, conversaId }) {
+  const navigate = useNavigate();
+  const fimRef = useRef(null);
+  const campoRef = useRef(null);
+  const arquivoTextoRef = useRef(null);
+  const arquivoAudioRef = useRef(null);
+
+  const [conversa] = useState(() => carregarConversa(userId, conversaId));
+  const [mensagens, setMensagens] = useState(() =>
+    conversa?.mensagens.length ? conversa.mensagens : conversa ? [mensagemInicial(conversa.materia)] : []
+  );
+  const [estilo, setEstilo] = useState(conversa?.estilo);
   const [input, setInput] = useState('');
   const [carregando, setCarregando] = useState(false);
   const [notasAbertas, setNotasAbertas] = useState(false);
-  const [pronto, setPronto] = useState(false);
+  const [versaoNotas, setVersaoNotas] = useState(0);
+  const [avisoNota, setAvisoNota] = useState('');
+  const telaGrande = useMediaQuery('(min-width: 1200px)');
+  const telaMedia = useMediaQuery('(min-width: 768px)');
 
-  // Carrega a conversa (matéria + histórico) assim que sabemos quem é o usuário
+  const materia = conversa?.materia;
+
+  // Conversa inexistente (link antigo, outro navegador): volta para o início
   useEffect(() => {
-    if (!conversaId) {
-      navigate('/', { replace: true });
-      return;
-    }
-    getUserId().then((uid) => {
-      const conversa = carregarConversa(uid, conversaId);
-      if (!conversa) {
-        navigate('/', { replace: true });
-        return;
-      }
-      setUserId(uid);
-      setMateria(conversa.materia);
-      setMensagens(
-        conversa.mensagens.length > 0
-          ? conversa.mensagens
-          : [{ autor: 'ia', texto: `Vamos começar a estudar ${conversa.materia}. O que você já sabe sobre o tema, ou por onde quer começar?` }]
-      );
-      setPronto(true);
-    });
-  }, [conversaId, navigate]);
+    if (!conversa) navigate('/', { replace: true });
+  }, [conversa, navigate]);
 
   useEffect(() => {
-    fimRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [mensagens]);
+    fimRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [mensagens, carregando]);
 
-  // Se veio da tela de resultado dos exercícios com uma pergunta pendente
-  // ("me ensine o que preciso revisar"), envia ela automaticamente assim que a conversa carrega.
+  // Veio do resultado dos exercícios com uma pergunta pendente ("me ensine o que errei")
   useEffect(() => {
-    if (!pronto) return;
+    if (!conversa) return;
     const pendente = sessionStorage.getItem('estudai_pergunta_pendente');
     if (!pendente) return;
     sessionStorage.removeItem('estudai_pergunta_pendente');
-    enviarMensagemAutomatica(pendente);
+    perguntar(pendente);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pronto]);
+  }, []);
 
-  async function enviarMensagemAutomatica(texto) {
-    const novaLista = [...mensagens, { autor: 'usuario', texto }];
-    atualizarMensagens(novaLista);
-    setCarregando(true);
-    try {
-      const resposta = await askStudyAssistant({ materia, historico: novaLista });
-      atualizarMensagens([...novaLista, { autor: 'ia', texto: resposta }]);
-    } catch (err) {
-      atualizarMensagens([...novaLista, { autor: 'ia', texto: 'Não consegui responder agora. Tenta de novo em instantes.' }]);
-    } finally {
-      setCarregando(false);
-    }
-  }
+  if (!conversa) return null;
 
   function atualizarMensagens(novaLista) {
     setMensagens(novaLista);
-    if (userId && conversaId) salvarMensagens(userId, conversaId, novaLista);
+    // a mensagem de boas-vindas é só visual, não precisa ser salva
+    salvarMensagens(userId, conversaId, novaLista.filter((m) => !m.boasVindas));
   }
 
-  function adicionarMensagem(msg) {
-    atualizarMensagens([...mensagens, msg]);
-  }
-
-  async function enviarMensagem(e) {
-    e.preventDefault();
-    const texto = input.trim();
-    if (!texto || carregando) return;
-
-    const novaLista = [...mensagens, { autor: 'usuario', texto }];
-    atualizarMensagens(novaLista);
-    setInput('');
+  async function responder(historico, estiloDaResposta = estilo) {
     setCarregando(true);
-
     try {
-      const resposta = await askStudyAssistant({ materia, historico: novaLista });
-      atualizarMensagens([...novaLista, { autor: 'ia', texto: resposta }]);
-    } catch (err) {
-      atualizarMensagens([...novaLista, { autor: 'ia', texto: 'Não consegui responder agora. Tenta de novo em instantes.' }]);
+      const resposta = await askStudyAssistant({ materia, historico, estilo: estiloDaResposta });
+      atualizarMensagens([...historico, { autor: 'ia', texto: resposta }]);
+    } catch {
+      atualizarMensagens([...historico, { autor: 'ia', texto: ERRO_IA, erro: true }]);
     } finally {
       setCarregando(false);
     }
   }
 
-  async function handleUploadTexto(e) {
+  function perguntar(texto) {
+    const limpo = texto.trim();
+    if (!limpo || carregando) return;
+    registrarDiaDeEstudo(userId);
+    setAvisoNota('');
+    const historico = [...mensagens, { autor: 'usuario', texto: limpo }];
+    atualizarMensagens(historico);
+    responder(historico);
+  }
+
+  function enviar(e) {
+    e.preventDefault();
+    perguntar(input);
+    setInput('');
+    if (campoRef.current) campoRef.current.style.height = 'auto';
+  }
+
+  // Enter envia; Shift+Enter quebra a linha
+  function aoTeclar(e) {
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+      enviar(e);
+    }
+  }
+
+  // O campo cresce conforme o texto, até um limite
+  function aoDigitar(e) {
+    setInput(e.target.value);
+    e.target.style.height = 'auto';
+    e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
+  }
+
+  function trocarEstilo(novoEstilo) {
+    setEstilo(novoEstilo);
+    salvarEstilo(userId, conversaId, novoEstilo);
+    salvarEstiloPreferido(userId, novoEstilo);
+  }
+
+  // "Mais curto" / "Explica melhor": refaz a última resposta no novo estilo
+  function refazerResposta(novoEstilo) {
+    if (!novoEstilo || carregando) return;
+    trocarEstilo(novoEstilo);
+    setAvisoNota('');
+    const historico = mensagens.slice(0, -1); // tira a última resposta da IA
+    setMensagens(historico);
+    responder(historico, novoEstilo);
+  }
+
+  async function salvarNasAnotacoes(texto) {
+    setAvisoNota('');
+    try {
+      // tira os símbolos de formatação (**negrito**, # título, `código`) para a nota ficar limpa
+      const limpo = texto.replace(/\*\*|__|`/g, '').replace(/^#+\s*/gm, '').trim();
+      await notasApi.criar(materia, limpo.slice(0, 5000));
+      setVersaoNotas((v) => v + 1);
+      setAvisoNota('Salvo nas anotações.');
+    } catch (e) {
+      setAvisoNota(e.message);
+    }
+  }
+
+  async function aoEscolherTexto(e) {
     const arquivo = e.target.files?.[0];
     e.target.value = '';
-    if (!arquivo) return;
+    if (!arquivo || carregando) return;
+    registrarDiaDeEstudo(userId);
 
     const conteudo = await arquivo.text();
-    const comAnexo = [...mensagens, { autor: 'usuario', texto: `📄 Enviou o texto "${arquivo.name}" para resumir.` }];
+    const comAnexo = [...mensagens, { autor: 'usuario', texto: `Enviou o texto "${arquivo.name}" para resumir.`, anexo: true }];
     atualizarMensagens(comAnexo);
     setCarregando(true);
     try {
-      const resumo = await summarizeText({ materia, texto: conteudo });
+      const resumo = await summarizeText({ materia, texto: conteudo, estilo });
       atualizarMensagens([...comAnexo, { autor: 'ia', texto: resumo }]);
     } catch {
-      atualizarMensagens([...comAnexo, { autor: 'ia', texto: 'Não consegui resumir esse texto agora. Tenta de novo.' }]);
+      atualizarMensagens([...comAnexo, { autor: 'ia', texto: 'Não consegui resumir esse texto agora. Tenta de novo.', erro: true }]);
     } finally {
       setCarregando(false);
     }
   }
 
-  async function handleUploadAudio(e) {
+  async function aoEscolherAudio(e) {
     const arquivo = e.target.files?.[0];
     e.target.value = '';
-    if (!arquivo) return;
+    if (!arquivo || carregando) return;
+    registrarDiaDeEstudo(userId);
 
-    const comAnexo = [...mensagens, { autor: 'usuario', texto: `🎧 Enviou o áudio "${arquivo.name}" para explicar.` }];
+    const comAnexo = [...mensagens, { autor: 'usuario', texto: `Enviou o áudio "${arquivo.name}" para explicar.`, anexo: true }];
     atualizarMensagens(comAnexo);
     setCarregando(true);
     try {
       const base64 = await arquivoParaBase64(arquivo);
-      const explicacao = await explainAudio({ materia, arquivoBase64: base64, mimeType: arquivo.type || 'audio/mpeg' });
+      const explicacao = await explainAudio({ materia, arquivoBase64: base64, mimeType: arquivo.type || 'audio/mpeg', estilo });
       atualizarMensagens([...comAnexo, { autor: 'ia', texto: explicacao }]);
     } catch {
-      atualizarMensagens([...comAnexo, { autor: 'ia', texto: 'Não consegui ouvir esse áudio agora. Tenta de novo.' }]);
+      atualizarMensagens([...comAnexo, { autor: 'ia', texto: 'Não consegui ouvir esse áudio agora. Tenta de novo.', erro: true }]);
     } finally {
       setCarregando(false);
     }
@@ -152,7 +265,7 @@ export default function Chat() {
   function abrirExercicios() {
     localStorage.setItem('estudai_materia', materia);
     const contexto = mensagens
-      .filter((m) => m.texto)
+      .filter((m) => m.texto && !m.boasVindas)
       .map((m) => `${m.autor === 'usuario' ? 'Aluno' : 'Tutor'}: ${m.texto}`)
       .join('\n');
     sessionStorage.setItem('estudai_exercicios_contexto', contexto);
@@ -164,126 +277,165 @@ export default function Chat() {
     navigate('/desempenho');
   }
 
-  if (!pronto) return null;
+  const ultima = mensagens[mensagens.length - 1];
+  const anterior = mensagens[mensagens.length - 2];
+  // Os ajustes de tamanho só aparecem na última resposta, e só se ela respondeu a uma pergunta digitada
+  const podeAjustar = !carregando && ultima?.autor === 'ia' && !ultima.erro && !ultima.boasVindas && anterior?.autor === 'usuario' && !anterior.anexo;
+  const maisCurto = estiloMaisCurto(estilo);
+  const maisLongo = estiloMaisLongo(estilo);
+  const titulo = tituloConversa({ mensagens });
 
   return (
-    <div className="screen" style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}>
-      <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-          <button
-            onClick={() => navigate('/')}
-            style={{ background: 'none', border: 'none', fontSize: 18, color: 'var(--text-secondary)', flexShrink: 0 }}
-            aria-label="Voltar"
-          >
-            ←
+    <div className={`chat ${classeMateria(materia)}`}>
+      <section className="chat-principal" aria-label="Conversa">
+        <header className="chat-topo">
+          <button type="button" className="btn-icone so-celular" onClick={() => navigate('/')} aria-label="Voltar para o início">
+            <ArrowLeft size={22} aria-hidden="true" />
           </button>
-          <span style={{ fontWeight: 600, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{materia}</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-          <button
-            onClick={abrirDesempenho}
-            style={{ background: 'none', border: 'none', fontSize: 18 }}
-            aria-label="Ver desempenho"
-          >
-            📊
-          </button>
-          <button
-            onClick={abrirExercicios}
-            style={{ background: 'var(--blue-light)', border: 'none', borderRadius: 20, padding: '6px 12px', fontSize: 12, color: 'var(--blue-dark)', fontWeight: 600 }}
-          >
-            📝 Exercícios
-          </button>
-          <button
-            onClick={() => setNotasAbertas(true)}
-            style={{ background: 'none', border: 'none', fontSize: 18 }}
-            aria-label="Abrir anotações"
-          >
-            📌
-          </button>
-        </div>
-      </div>
-
-      <div style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {mensagens.filter((m) => m.texto).map((m, i) => (
-          <div
-            key={i}
-            className={m.autor === 'ia' ? 'bolha-markdown' : undefined}
-            style={{
-              alignSelf: m.autor === 'usuario' ? 'flex-end' : 'flex-start',
-              background: m.autor === 'usuario' ? 'var(--blue)' : 'var(--surface)',
-              color: m.autor === 'usuario' ? '#fff' : 'var(--text-primary)',
-              border: m.autor === 'usuario' ? 'none' : '1px solid var(--border)',
-              borderRadius: m.autor === 'usuario' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
-              padding: '9px 13px',
-              fontSize: 13,
-              maxWidth: '85%',
-              whiteSpace: m.autor === 'usuario' ? 'pre-wrap' : 'normal',
-            }}
-          >
-            {m.autor === 'ia' ? <ReactMarkdown>{m.texto}</ReactMarkdown> : m.texto}
+          <div className="chat-topo-titulo">
+            <span className="chat-topo-materia">{materia}</span>
+            <h1>{titulo === 'Conversa nova' ? 'Nova conversa' : titulo}</h1>
           </div>
-        ))}
-        {carregando && (
-          <div className="indicador-pensando" role="status" aria-live="polite">
-            <span>Pensando</span>
-            <span className="pontos-pensando" aria-hidden="true">
-              <span />
-              <span />
-              <span />
-            </span>
+          <div className="chat-topo-acoes">
+            <button type="button" className="btn-icone contorno sem-painel" onClick={() => setNotasAbertas(true)} aria-label="Anotações">
+              <NotebookPen size={19} aria-hidden="true" />
+            </button>
+            <button type="button" className="btn-icone contorno sem-painel" onClick={abrirDesempenho} aria-label="Desempenho">
+              <ChartColumn size={19} aria-hidden="true" />
+            </button>
+            <button type="button" className="btn btn-primario so-tablet-pc" onClick={abrirExercicios}>
+              <ListChecks size={18} aria-hidden="true" /> Gerar exercícios
+            </button>
+            <button type="button" className="btn-icone btn-suave so-celular" onClick={abrirExercicios} aria-label="Gerar exercícios">
+              <ListChecks size={20} aria-hidden="true" />
+            </button>
           </div>
-        )}
-        <div ref={fimRef} />
-      </div>
+        </header>
 
-      <form onSubmit={enviarMensagem} style={{ padding: '0.75rem 1.25rem 1rem', borderTop: '1px solid var(--border)' }}>
-        <div style={{ display: 'flex', gap: 10, marginBottom: 8 }}>
-          <button
-            type="button"
-            onClick={() => inputTextoRef.current?.click()}
-            style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 20, padding: '5px 12px', fontSize: 12, color: 'var(--text-secondary)' }}
-          >
-            📄 Resumir texto
-          </button>
-          <button
-            type="button"
-            onClick={() => inputAudioRef.current?.click()}
-            style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 20, padding: '5px 12px', fontSize: 12, color: 'var(--text-secondary)' }}
-          >
-            🎧 Enviar áudio
-          </button>
-          <input ref={inputTextoRef} type="file" accept=".txt,.md" onChange={handleUploadTexto} style={{ display: 'none' }} />
-          <input ref={inputAudioRef} type="file" accept="audio/*" onChange={handleUploadAudio} style={{ display: 'none' }} />
+        <div className="chat-mensagens" aria-live="polite">
+          <div className="chat-coluna">
+            {mensagens.map((m, i) =>
+              m.autor === 'usuario' ? (
+                <div key={i} className="msg-aluno">{m.texto}</div>
+              ) : (
+                <div key={i} className="msg-ia">
+                  <span className="msg-ia-avatar" aria-hidden="true">
+                    <Sparkles size={16} fill="currentColor" />
+                  </span>
+                  <div className="msg-ia-corpo">
+                    <div className="resposta-ia">
+                      <ReactMarkdown>{m.texto}</ReactMarkdown>
+                    </div>
+                    {i === mensagens.length - 1 && podeAjustar && (
+                      <div className="acoes-resposta">
+                        {maisCurto && (
+                          <button type="button" className="pilula contorno" onClick={() => refazerResposta(maisCurto)}>
+                            <Minimize2 size={14} aria-hidden="true" /> Mais curto
+                          </button>
+                        )}
+                        {maisLongo && (
+                          <button type="button" className="pilula contorno" onClick={() => refazerResposta(maisLongo)}>
+                            <Maximize2 size={14} aria-hidden="true" /> Explica melhor
+                          </button>
+                        )}
+                        <button type="button" className="pilula contorno" onClick={() => salvarNasAnotacoes(m.texto)}>
+                          <BookmarkPlus size={14} aria-hidden="true" /> Salvar nas anotações
+                        </button>
+                        {avisoNota && <span role="status" className="texto-suave" style={{ fontSize: 13, alignSelf: 'center' }}>{avisoNota}</span>}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            )}
+
+            {carregando && (
+              <div className="msg-ia">
+                <span className="msg-ia-avatar" aria-hidden="true">
+                  <Sparkles size={16} fill="currentColor" />
+                </span>
+                <div className="indicador-pensando" role="status">
+                  Pensando
+                  <span className="pontos-pensando" aria-hidden="true">
+                    <span />
+                    <span />
+                    <span />
+                  </span>
+                </div>
+              </div>
+            )}
+            <div ref={fimRef} />
+          </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input
-            type="text"
-            className="text-input"
-            style={{ flex: 1, borderRadius: 20 }}
-            placeholder="Digite sua dúvida"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-          />
-          <button
-            type="submit"
-            disabled={carregando}
-            style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--blue)', border: 'none', color: '#fff', flexShrink: 0 }}
-            aria-label="Enviar"
-          >
-            ➤
-          </button>
-        </div>
-      </form>
+        <form className="chat-entrada" onSubmit={enviar}>
+          <div className="chat-coluna">
+            <div className="chat-entrada-linha">
+              <label className="seletor-estilo">
+                Respostas:
+                <select value={estilo} onChange={(e) => trocarEstilo(e.target.value)} aria-label="Tamanho das respostas">
+                  {ORDEM_ESTILOS.map((chave) => (
+                    <option key={chave} value={chave}>{ESTILOS[chave].rotulo}</option>
+                  ))}
+                </select>
+              </label>
+              <button type="button" className="pilula" onClick={() => perguntar('Me dá outro exemplo sobre isso?')} disabled={carregando}>
+                Outro exemplo
+              </button>
+              <button type="button" className="pilula" onClick={() => perguntar('Pode resumir o que estudamos até agora em tópicos?')} disabled={carregando}>
+                Resumir a conversa
+              </button>
+            </div>
 
-      {userId && (
-        <NotesPanel
-          userId={userId}
-          materia={materia}
-          aberto={notasAbertas}
-          onFechar={() => setNotasAbertas(false)}
-        />
+            <div className="caixa-mensagem">
+              <button type="button" className="btn-icone" onClick={() => arquivoTextoRef.current?.click()} aria-label="Enviar texto para resumir (.txt ou .md)" disabled={carregando}>
+                <FileText size={20} aria-hidden="true" />
+              </button>
+              <label htmlFor="campo-mensagem" className="so-leitor">Mensagem</label>
+              <textarea
+                id="campo-mensagem"
+                ref={campoRef}
+                rows={1}
+                placeholder={telaMedia ? `Pergunte sobre ${materia}…` : 'Digite sua dúvida…'}
+                value={input}
+                onChange={aoDigitar}
+                onKeyDown={aoTeclar}
+              />
+              <button type="button" className="btn-icone" onClick={() => arquivoAudioRef.current?.click()} aria-label="Enviar áudio para explicar" disabled={carregando}>
+                <Mic size={20} aria-hidden="true" />
+              </button>
+              <button type="submit" className="btn-icone btn-enviar" disabled={!input.trim() || carregando} aria-label="Enviar mensagem">
+                <ArrowUp size={20} strokeWidth={2.4} aria-hidden="true" />
+              </button>
+              <input ref={arquivoTextoRef} type="file" accept=".txt,.md" onChange={aoEscolherTexto} hidden />
+              <input ref={arquivoAudioRef} type="file" accept="audio/*" onChange={aoEscolherAudio} hidden />
+            </div>
+          </div>
+        </form>
+      </section>
+
+      {/* PC: anotações e desempenho sempre visíveis ao lado */}
+      {telaGrande && (
+        <aside className="painel-chat" aria-label="Anotações e desempenho">
+          <NotesPanel userId={userId} materia={materia} versao={versaoNotas} />
+          <ResumoDesempenho userId={userId} materia={materia} onPraticar={abrirExercicios} />
+        </aside>
       )}
+
+      {/* Tablet e celular: anotações numa gaveta */}
+      <Gaveta titulo={`Anotações · ${materia}`} aberta={notasAbertas && !telaGrande} onFechar={() => setNotasAbertas(false)}>
+        <NotesPanel userId={userId} materia={materia} mostrarTitulo={false} versao={versaoNotas} />
+      </Gaveta>
     </div>
+  );
+}
+
+export default function Chat({ conversaId }) {
+  return (
+    <AppLayout semAbasNoCelular>
+      {(usuario) =>
+        usuario.carregando ? null : <ConversaDeEstudo userId={usuario.userId} conversaId={conversaId} />
+      }
+    </AppLayout>
   );
 }

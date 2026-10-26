@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { supabase } from './lib/supabaseClient';
 import Login from './pages/Login';
 import Home from './pages/Home';
+import Conversas from './pages/Conversas';
 import NewChat from './pages/NewChat';
 import Chat from './pages/Chat';
 import Exercises from './pages/Exercises';
@@ -11,6 +12,18 @@ import Performance from './pages/Performance';
 function RotaPrivada({ sessao, carregando, children }) {
   if (carregando) return null; // evita "piscar" a tela de login antes de checar
   return sessao ? children : <Navigate to="/login" replace />;
+}
+
+// A "key" faz o Chat recomeçar do zero ao trocar de conversa pelo menu lateral
+function ChatDaRota() {
+  const { id } = useParams();
+  return <Chat key={id} conversaId={id} />;
+}
+
+// Endereço antigo (/chat): volta para a última conversa aberta
+function UltimoChat() {
+  const id = sessionStorage.getItem('estudai_conversa_id');
+  return <Navigate to={id ? `/chat/${id}` : '/'} replace />;
 }
 
 export default function App() {
@@ -30,18 +43,25 @@ export default function App() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
+  const privada = (elemento) => (
+    <RotaPrivada sessao={sessao} carregando={carregando}>
+      {elemento}
+    </RotaPrivada>
+  );
+
   return (
     <BrowserRouter>
-      <div className="app-shell">
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/" element={<RotaPrivada sessao={sessao} carregando={carregando}><Home /></RotaPrivada>} />
-          <Route path="/nova" element={<RotaPrivada sessao={sessao} carregando={carregando}><NewChat /></RotaPrivada>} />
-          <Route path="/chat" element={<RotaPrivada sessao={sessao} carregando={carregando}><Chat /></RotaPrivada>} />
-          <Route path="/exercicios" element={<RotaPrivada sessao={sessao} carregando={carregando}><Exercises /></RotaPrivada>} />
-          <Route path="/desempenho" element={<RotaPrivada sessao={sessao} carregando={carregando}><Performance /></RotaPrivada>} />
-        </Routes>
-      </div>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/" element={privada(<Home />)} />
+        <Route path="/conversas" element={privada(<Conversas />)} />
+        <Route path="/nova" element={privada(<NewChat />)} />
+        <Route path="/chat/:id" element={privada(<ChatDaRota />)} />
+        <Route path="/chat" element={privada(<UltimoChat />)} />
+        <Route path="/exercicios" element={privada(<Exercises />)} />
+        <Route path="/desempenho" element={privada(<Performance />)} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
     </BrowserRouter>
   );
 }
