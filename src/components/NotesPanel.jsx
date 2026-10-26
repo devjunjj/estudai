@@ -1,19 +1,57 @@
-import { useState } from 'react';
-import { carregarNotas, salvarNota, removerNota } from '../lib/notesStore';
+import { useEffect, useState } from 'react';
+import { notasApi } from '../lib/api';
 
 export default function NotesPanel({ userId, materia, aberto, onFechar }) {
-  const [notas, setNotas] = useState(() => carregarNotas(userId, materia));
+  const [notas, setNotas] = useState([]);
   const [rascunho, setRascunho] = useState('');
+  const [carregando, setCarregando] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState('');
 
-  function adicionar() {
+  // Busca as notas na API sempre que o painel é aberto
+  useEffect(() => {
+    if (!aberto) return;
+
+    let cancelado = false; // evita atualizar o estado se o painel fechar antes da resposta
+    setCarregando(true);
+    setErro('');
+
+    notasApi
+      .listar(userId, materia)
+      .then((dados) => !cancelado && setNotas(dados))
+      .catch((e) => !cancelado && setErro(e.message))
+      .finally(() => !cancelado && setCarregando(false));
+
+    return () => {
+      cancelado = true;
+    };
+  }, [aberto, userId, materia]);
+
+  async function adicionar() {
     const texto = rascunho.trim();
     if (!texto) return;
-    setNotas(salvarNota(userId, materia, texto));
-    setRascunho('');
+
+    setSalvando(true);
+    setErro('');
+    try {
+      const nova = await notasApi.criar(userId, materia, texto);
+      setNotas((atuais) => [nova, ...atuais]);
+      setRascunho('');
+    } catch (e) {
+      setErro(e.message);
+    } finally {
+      setSalvando(false);
+    }
   }
 
-  function excluir(id) {
-    setNotas(removerNota(userId, materia, id));
+  async function excluir(id) {
+    setErro('');
+    try {
+      await notasApi.excluir(userId, id);
+      setNotas((atuais) => atuais.filter((n) => n.id !== id));
+    } catch (e) {
+      setErro(e.message);
+    }
   }
 
   if (!aberto) return null;
@@ -57,13 +95,21 @@ export default function NotesPanel({ userId, materia, aberto, onFechar }) {
             value={rascunho}
             onChange={(e) => setRascunho(e.target.value)}
           />
-          <button className="btn-primary" onClick={adicionar} disabled={!rascunho.trim()}>
-            Salvar anotação
+          <button className="btn-primary" onClick={adicionar} disabled={!rascunho.trim() || salvando}>
+            {salvando ? 'Salvando...' : 'Salvar anotação'}
           </button>
+          {erro && (
+            <p style={{ fontSize: 12, color: 'var(--danger-text)', margin: '8px 0 0' }}>{erro}</p>
+          )}
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {notas.length === 0 && (
+          {carregando && (
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', marginTop: 20 }}>
+              Carregando anotações...
+            </p>
+          )}
+          {!carregando && notas.length === 0 && (
             <p style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', marginTop: 20 }}>
               Nenhuma anotação ainda.
             </p>
