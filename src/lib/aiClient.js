@@ -42,18 +42,35 @@ async function chamarGemini(parts) {
   return dados.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
 }
 
-export async function askStudyAssistant({ materia, historico }) {
+// Como a IA deve escrever em cada estilo escolhido pelo aluno
+const INSTRUCOES_ESTILO = {
+  direto: `Responda de forma CURTA: no máximo 2 parágrafos curtos (ou até 4 tópicos).
+Vá direto ao essencial e use no máximo um exemplo rápido. Não faça introdução.`,
+  equilibrado: `Responda com tamanho MÉDIO: a ideia principal primeiro, depois um exemplo concreto.
+Use blocos curtos (parágrafos de 2 a 3 linhas ou tópicos) e destaque em **negrito** os termos-chave.`,
+  detalhado: `Responda de forma DETALHADA: explique passo a passo, mostrando o porquê de cada etapa,
+com exemplos e os erros mais comuns. Mesmo longa, organize em seções curtas com títulos e tópicos,
+para a leitura não cansar.`,
+};
+
+// Regras que valem para qualquer estilo: o texto nunca pode desanimar quem está estudando
+const REGRAS_GERAIS = `Regras de escrita:
+- Comece pela resposta, sem frases de introdução como "Ótima pergunta".
+- Parágrafos curtos; nada de blocos enormes de texto.
+- Linguagem simples, como um bom professor falando com o aluno.
+- Termine com UMA pergunta curta para checar se o aluno entendeu ou oferecendo aprofundar um ponto.`;
+
+export async function askStudyAssistant({ materia, historico, estilo = 'equilibrado' }) {
   const contexto = historico
     .map((m) => `${m.autor === 'usuario' ? 'Aluno' : 'Tutor'}: ${m.texto}`)
     .join('\n');
 
   const prompt = `Você é um tutor paciente e didático ensinando ${materia} para um aluno.
-Continue a conversa abaixo respondendo à última mensagem do aluno de forma completa e clara.
-Explique o raciocínio, não só a conclusão, e use exemplos concretos sempre que ajudar a fixar o conceito.
-Pode se estender o quanto for necessário para explicar bem — não corte a explicação pela metade
-só para ser breve. Ao mesmo tempo, evite encher a resposta com informação irrelevante:
-seja completo no que importa, não prolixo. Ao final, se fizer sentido, convide o aluno a
-aprofundar em algum ponto específico.
+Continue a conversa abaixo respondendo à última mensagem do aluno.
+
+${INSTRUCOES_ESTILO[estilo] ?? INSTRUCOES_ESTILO.equilibrado}
+
+${REGRAS_GERAIS}
 
 ${contexto}
 Tutor:`;
@@ -81,10 +98,12 @@ Sem markdown, sem texto adicional, apenas o JSON.`;
 }
 
 // Resume um texto colado/enviado pelo aluno de forma clara e didática
-export async function summarizeText({ materia, texto }) {
+export async function summarizeText({ materia, texto, estilo = 'equilibrado' }) {
   const prompt = `Você é um tutor de ${materia}. Resuma o texto abaixo de forma clara
 e didática para um aluno entender com facilidade. Use tópicos curtos quando ajudar
 a organizar as ideias. Seja fiel ao conteúdo original, sem inventar informações.
+
+${INSTRUCOES_ESTILO[estilo] ?? INSTRUCOES_ESTILO.equilibrado}
 
 Texto:
 """
@@ -99,11 +118,12 @@ Resumo claro:`;
 // Transcreve e explica um arquivo de áudio enviado pelo aluno.
 // arquivoBase64: string base64 (sem o prefixo "data:...;base64,")
 // mimeType: ex. "audio/mpeg", "audio/mp4", "audio/wav"
-export async function explainAudio({ materia, arquivoBase64, mimeType }) {
+export async function explainAudio({ materia, arquivoBase64, mimeType, estilo = 'equilibrado' }) {
   const prompt = `Você é um tutor de ${materia}. Ouça o áudio a seguir, transcreva
 o conteúdo principal e depois explique de forma clara e didática o que foi dito,
 como se estivesse ensinando um aluno. Estruture a resposta em duas partes:
-"Transcrição:" e "Explicação:".`;
+"Transcrição:" e "Explicação:". Na explicação, siga este tamanho:
+${INSTRUCOES_ESTILO[estilo] ?? INSTRUCOES_ESTILO.equilibrado}`;
 
   return chamarGemini([
     { text: prompt },
