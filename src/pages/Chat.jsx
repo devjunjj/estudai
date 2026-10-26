@@ -153,8 +153,8 @@ function ConversaDeEstudo({ userId, conversaId }) {
   async function responder(historico, estiloDaResposta = estilo) {
     setCarregando(true);
     try {
-      const resposta = await askStudyAssistant({ materia, historico, estilo: estiloDaResposta });
-      atualizarMensagens([...historico, { autor: 'ia', texto: resposta }]);
+      const { texto, sugestoes } = await askStudyAssistant({ materia, historico, estilo: estiloDaResposta });
+      atualizarMensagens([...historico, { autor: 'ia', texto, sugestoes }]);
     } catch {
       atualizarMensagens([...historico, { autor: 'ia', texto: ERRO_IA, erro: true }]);
     } finally {
@@ -326,6 +326,15 @@ function ConversaDeEstudo({ userId, conversaId }) {
                     <div className="resposta-ia">
                       <ReactMarkdown>{m.texto}</ReactMarkdown>
                     </div>
+                    {i === mensagens.length - 1 && !carregando && m.sugestoes?.length > 0 && (
+                      <div className="sugestoes-resposta" role="group" aria-label="Respostas rápidas">
+                        {m.sugestoes.map((sugestao) => (
+                          <button key={sugestao} type="button" className="pilula" onClick={() => perguntar(sugestao)}>
+                            {sugestao}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     {i === mensagens.length - 1 && podeAjustar && (
                       <div className="acoes-resposta">
                         {maisCurto && (

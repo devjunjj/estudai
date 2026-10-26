@@ -28,7 +28,24 @@ const REGRAS_GERAIS = `Regras de escrita:
 - Comece pela resposta, sem frases de introdução como "Ótima pergunta".
 - Parágrafos curtos; nada de blocos enormes de texto.
 - Linguagem simples, como um bom professor falando com o aluno.
-- Termine com UMA pergunta curta para checar se o aluno entendeu ou oferecendo aprofundar um ponto.`;
+- Termine com UMA pergunta curta para checar se o aluno entendeu ou oferecendo caminhos para continuar.
+- Na ÚLTIMA linha, escreva "SUGESTOES:" seguido de 2 ou 3 respostas curtas (até 6 palavras cada) que o aluno
+  poderia dar à sua pergunta, separadas por " | ". Exemplo:
+  SUGESTOES: Sim, desde o começo | Quero outro tema | Me dá um exercício`;
+
+// Separa a linha "SUGESTOES: a | b | c" do texto da resposta.
+// As sugestões viram botões no chat; o texto fica sem essa linha.
+export function separarSugestoes(textoCompleto = '') {
+  const encontrado = textoCompleto.match(/(?:^|\n)[ \t*_]*SUGEST(?:Õ|O)ES[*_]*:[*_]*(.*)$/i);
+  if (!encontrado) return { texto: textoCompleto.trim(), sugestoes: [] };
+
+  const sugestoes = encontrado[1]
+    .split('|')
+    .map((s) => s.replace(/[*_`"]/g, '').trim())
+    .filter((s) => s && s.length <= 60)
+    .slice(0, 3);
+  return { texto: textoCompleto.slice(0, encontrado.index).trim(), sugestoes };
+}
 
 export async function askStudyAssistant({ materia, historico, estilo = 'equilibrado' }) {
   const contexto = historico
@@ -45,7 +62,7 @@ ${REGRAS_GERAIS}
 ${contexto}
 Tutor:`;
 
-  return chamarIA(prompt);
+  return separarSugestoes(await chamarIA(prompt)); // { texto, sugestoes }
 }
 
 export async function gerarExercicios({ materia, quantidade = 5, contexto = '' }) {

@@ -2192,3 +2192,18 @@ textarea.campo-texto {
 .btn-sair {
   color: var(--perigo);
 }
+
+/* Respostas rápidas sugeridas pela IA (viram a próxima mensagem do aluno) */
+.sugestoes-resposta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sugestoes-resposta .pilula {
+  white-space: normal;
+  text-align: left;
+  min-height: 38px;
+  padding: 6px 14px;
+  border: 1px solid var(--azul-borda);
+}

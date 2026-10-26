@@ -148,6 +148,22 @@ if (app.Environment.IsDevelopment())
 
 app.UseForwardedHeaders();
 app.UseCors(PoliticaFrontend);
+
+// Erro inesperado (ex.: banco fora do ar) vira uma resposta JSON 500 que o site consegue ler,
+// em vez de uma falha "muda" no navegador. O detalhe vai para o log do servidor.
+app.Use(async (contexto, proximo) =>
+{
+    try
+    {
+        await proximo();
+    }
+    catch (Exception erro) when (!contexto.Response.HasStarted)
+    {
+        app.Logger.LogError(erro, "Erro inesperado em {Metodo} {Caminho}", contexto.Request.Method, contexto.Request.Path);
+        contexto.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        await contexto.Response.WriteAsJsonAsync(new { mensagem = "Erro inesperado no servidor. Tente de novo em instantes." });
+    }
+});
 app.UseAuthentication(); // 1º: descobre QUEM é o usuário (lê e valida o token)
 app.UseAuthorization();  // 2º: decide se ele PODE acessar o endpoint
 app.UseRateLimiter();    // 3º: aplica o limite de uso por usuário

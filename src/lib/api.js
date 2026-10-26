@@ -15,20 +15,59 @@ async function obterToken() {
   return token;
 }
 
+const esperar = (ms) => new Promise((resolver) => setTimeout(resolver, ms));
+
+// No plano grátis do Render a API "dorme" depois de 15 min sem uso e leva
+// cerca de 1 minuto para acordar. Esta chamada leve já começa a acordá-la
+// assim que o app abre, antes de o aluno precisar dela.
+let jaAcordou = false;
+export function acordarApi() {
+  if (jaAcordou) return;
+  jaAcordou = true;
+  fetch(`${API_URL}/saude`, { cache: 'no-store' }).catch(() => {});
+}
+
+// Espera a API responder no /saude (até ~75 s). true = está no ar.
+async function esperarApiAcordar(limiteMs = 75_000) {
+  const inicio = Date.now();
+  while (Date.now() - inicio < limiteMs) {
+    try {
+      const resposta = await fetch(`${API_URL}/saude`, { cache: 'no-store' });
+      if (resposta.ok) return true;
+    } catch {
+      // ainda acordando: tenta de novo daqui a pouco
+    }
+    await esperar(4000);
+  }
+  return false;
+}
+
 async function requisicao(caminho, { metodo = 'GET', corpo } = {}) {
   const headers = { Authorization: `Bearer ${await obterToken()}` };
   if (corpo !== undefined) headers['Content-Type'] = 'application/json';
 
-  let resposta;
-  try {
-    resposta = await fetch(`${API_URL}${caminho}`, {
+  const enviar = () =>
+    fetch(`${API_URL}${caminho}`, {
       method: metodo,
       headers,
       body: corpo !== undefined ? JSON.stringify(corpo) : undefined,
     });
+
+  let resposta;
+  try {
+    resposta = await enviar();
   } catch {
-    // fetch só lança erro quando nem chega no servidor (API desligada, sem rede, CORS)
-    throw new Error('Não foi possível conectar à API. Ela está rodando?');
+    // fetch só falha quando não recebe resposta utilizável: API dormindo, sem internet
+    // ou erro no servidor sem cabeçalhos de CORS. Espera a API acordar e tenta uma vez mais.
+    const noAr = await esperarApiAcordar();
+    if (!noAr) {
+      throw new Error('Não foi possível conectar ao servidor. Verifique sua internet e tente de novo.');
+    }
+    try {
+      resposta = await enviar();
+    } catch {
+      throw new Error('O servidor está no ar, mas não conseguiu concluir o pedido. Tente de novo em instantes.');
+    }
   }
 
   if (resposta.status === 401) {

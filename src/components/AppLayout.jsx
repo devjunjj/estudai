@@ -1,6 +1,7 @@
 import { NavLink, useNavigate, useParams } from 'react-router-dom';
 import { ChartColumn, House, LogOut, MessageCircle, Moon, Plus, Sparkles, Sun, UserRound } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { acordarApi } from '../lib/api';
 import { supabase } from '../lib/supabaseClient';
 import { useUsuario } from '../lib/useUsuario';
 import { calcularSequencia, classeMateria } from '../lib/estudos';
@@ -143,6 +144,11 @@ function Abas() {
 // PC/tablet = menu lateral + conteúdo · celular = conteúdo + abas embaixo
 export default function AppLayout({ children, semAbasNoCelular = false }) {
   const usuario = useUsuario();
+
+  // Começa a acordar a API (Render grátis) assim que qualquer tela logada abre
+  useEffect(() => {
+    acordarApi();
+  }, []);
 
   return (
     <div className="app">
