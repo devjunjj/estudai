@@ -2,7 +2,7 @@
 
 Assistente de estudos com IA que se adapta à matéria do aluno: tira dúvidas em formato de conversa, gera exercícios, resume textos, explica áudios de aula e acompanha o desempenho por tópico.
 
-Aplicação web instalável no celular (PWA), feita em React.
+Aplicação full stack: frontend em React (PWA instalável no celular) e API em C# / ASP.NET Core com PostgreSQL.
 
 ## Funcionalidades
 
@@ -12,7 +12,7 @@ Aplicação web instalável no celular (PWA), feita em React.
 - **Desempenho**: histórico de acertos por matéria e os tópicos em que o aluno mais erra, com atalho para revisar esses tópicos no chat
 - **Resumo de textos**: o aluno cola um texto e recebe um resumo didático
 - **Áudio**: upload de um arquivo de áudio, que é transcrito e explicado
-- **Anotações** por matéria dentro do chat
+- **Anotações** por matéria dentro do chat, salvas no banco pela API em C#
 - **Tema claro/escuro** e instalação como app (PWA)
 
 ## Tecnologias
@@ -20,9 +20,11 @@ Aplicação web instalável no celular (PWA), feita em React.
 | Camada | Tecnologia |
 |---|---|
 | Frontend | React 19, Vite, React Router |
+| Backend | C# / ASP.NET Core 8 (Web API com controllers) |
+| Banco de dados | PostgreSQL (Supabase) com Entity Framework Core e migrations |
 | Autenticação | Supabase Auth |
 | IA | Google Gemini API |
-| Backend | Função serverless na Vercel (`/api/gemini`) |
+| Proxy da IA | Função serverless na Vercel (`/api/gemini`) |
 | PWA | vite-plugin-pwa |
 | Qualidade | Oxlint |
 
@@ -33,6 +35,9 @@ Navegador (React)
    │
    ├── Supabase Auth ........ login, cadastro e sessão
    │
+   ├── API ASP.NET Core ..... CRUD de anotações (/api/notes)
+   │      └── PostgreSQL (EF Core)
+   │
    └── /api/gemini (Vercel) . função serverless que guarda a chave da IA
           │
           └── Google Gemini API
@@ -42,9 +47,17 @@ Navegador (React)
 
 Toda a comunicação com a IA está concentrada em `src/lib/aiClient.js`, então trocar de modelo ou de provedor exige mudar só esse arquivo.
 
+**Segurança dos dados:** toda consulta da API filtra pelo usuário, então um aluno nunca acessa as anotações de outro. A connection string do banco fica no *user-secrets* do .NET (fora do repositório), e as tabelas têm RLS ativado no Supabase, bloqueando acesso direto pela chave pública.
+
 ## Estrutura de pastas
 
 ```
+backend/EstudAI.Api/
+  Controllers/           endpoints REST (NotesController)
+  Models/                entidades do banco
+  Dtos/                  contratos de entrada e saída, com validação
+  Data/                  AppDbContext (Entity Framework Core)
+  Migrations/            histórico de alterações do banco
 api/
   gemini.js              função serverless (proxy seguro para o Gemini)
 src/
@@ -52,14 +65,15 @@ src/
   components/            componentes reutilizáveis (NotesPanel)
   lib/
     aiClient.js          integração com a IA (prompts e chamadas)
+    api.js               cliente HTTP da API em C#
     supabaseClient.js    cliente de autenticação
-    conversationsStore.js, notesStore.js, performanceStore.js
-                         persistência de conversas, notas e resultados
+    conversationsStore.js, performanceStore.js
+                         conversas e resultados (ainda no navegador)
 ```
 
 ## Como rodar localmente
 
-Pré-requisitos: Node.js 20+, uma conta no [Supabase](https://supabase.com) e uma chave do [Google AI Studio](https://aistudio.google.com/apikey).
+Pré-requisitos: Node.js 20+, .NET SDK 8, uma conta no [Supabase](https://supabase.com) e uma chave do [Google AI Studio](https://aistudio.google.com/apikey).
 
 ```bash
 git clone https://github.com/devjunjj/estudai
@@ -68,7 +82,21 @@ npm install
 cp .env.example .env    # no Windows: copy .env.example .env
 ```
 
-Preencha o `.env` com a URL e a chave do seu projeto Supabase e a sua chave do Gemini. Depois:
+Preencha o `.env` com a URL e a chave do seu projeto Supabase e a sua chave do Gemini.
+
+**API (C#):** configure a connection string do PostgreSQL (no Supabase: *Connect → Direct → .NET → Session pooler*), crie as tabelas e suba a API:
+
+```bash
+cd backend/EstudAI.Api
+dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=...;Port=5432;Database=postgres;Username=...;Password=...;SSL Mode=Require"
+dotnet tool install --global dotnet-ef --version 8.0.11
+dotnet ef database update
+dotnet run
+```
+
+A documentação interativa (Swagger) fica em http://localhost:5018/swagger.
+
+**Frontend:** em outro terminal, na raiz do projeto:
 
 ```bash
 npm run dev
@@ -78,8 +106,9 @@ Acesse http://localhost:5173, crie uma conta e escolha uma matéria.
 
 ## Próximos passos
 
-- [ ] API própria em **C# / ASP.NET Core** para conversas, notas e desempenho
-- [ ] Banco de dados **PostgreSQL** com Entity Framework Core (hoje os dados ficam no `localStorage`)
+- [x] API própria em **C# / ASP.NET Core** com CRUD de anotações
+- [x] Banco de dados **PostgreSQL** com Entity Framework Core e migrations
+- [ ] Migrar conversas e desempenho do `localStorage` para a API
 - [ ] Validação do token JWT do Supabase na API
 - [ ] Testes automatizados (xUnit no backend)
 - [ ] Docker e deploy em nuvem
