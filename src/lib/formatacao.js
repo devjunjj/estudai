@@ -1,15 +1,17 @@
 // Textos de apoio para mostrar conversas em listas
 
+// Aceita tanto a conversa completa (com mensagens) quanto o resumo vindo da API (com titulo)
 export function tituloConversa(conversa) {
-  const primeiraDoAluno = conversa.mensagens.find((m) => m.autor === 'usuario' && m.texto);
-  if (!primeiraDoAluno) return 'Conversa nova';
-  const texto = primeiraDoAluno.texto;
+  const texto = conversa.titulo ?? conversa.mensagens?.find((m) => m.autor === 'usuario' && m.texto)?.texto;
+  if (!texto) return 'Conversa nova';
   return texto.length > 60 ? texto.slice(0, 60) + '…' : texto;
 }
 
 export function resumoConversa(conversa) {
-  const ultima = conversa.mensagens[conversa.mensagens.length - 1];
-  if (!ultima) return 'Toque para começar';
+  const ultima = conversa.ultimaMensagem != null
+    ? { autor: conversa.ultimoAutor, texto: conversa.ultimaMensagem }
+    : conversa.mensagens?.[conversa.mensagens.length - 1];
+  if (!ultima?.texto) return 'Toque para começar';
   const prefixo = ultima.autor === 'usuario' ? 'Você: ' : '';
   const texto = ultima.texto.replace(/[#*_`>]/g, '').replace(/\s+/g, ' ').trim();
   return prefixo + (texto.length > 90 ? texto.slice(0, 90) + '…' : texto);

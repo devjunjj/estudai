@@ -1,3 +1,5 @@
+import { estudosApi } from './api';
+
 // Dados de motivação: cor de cada matéria e sequência de dias estudados.
 
 // Paleta de matérias. A cor é escolhida a partir do nome, então a mesma
@@ -25,46 +27,31 @@ export function siglaMateria(materia = '') {
 
 // ---------- Sequência de dias estudados ----------
 
-function chave(userId) {
-  return `estudai_dias_${userId}`;
-}
 
-function paraDia(data) {
+// Data local no formato aaaa-mm-dd (a "virada do dia" é a do aluno, não a do servidor)
+export function paraDia(data) {
   const d = new Date(data);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function carregarDias(userId) {
-  try {
-    return new Set(JSON.parse(localStorage.getItem(chave(userId)) ?? '[]'));
-  } catch {
-    return new Set();
-  }
+// Chamado sempre que o aluno estuda (manda mensagem, faz exercícios).
+// Salva na API e avisa as outras telas para atualizar a sequência.
+let ultimoDiaRegistrado = null;
+export function registrarDiaDeEstudo() {
+  const hoje = paraDia(new Date());
+  if (ultimoDiaRegistrado === hoje) return; // um registro por dia basta
+  ultimoDiaRegistrado = hoje;
+  estudosApi
+    .registrarDias([hoje])
+    .then(() => window.dispatchEvent(new Event('estudai:dias')))
+    .catch(() => {
+      ultimoDiaRegistrado = null; // tenta de novo na próxima mensagem
+    });
 }
 
-// Chamado sempre que o aluno estuda (manda mensagem, faz exercícios)
-export function registrarDiaDeEstudo(userId) {
-  const dias = carregarDias(userId);
-  dias.add(paraDia(new Date()));
-  try {
-    localStorage.setItem(chave(userId), JSON.stringify([...dias]));
-  } catch {
-    // sem localStorage: a sequência só não fica salva
-  }
-}
-
-// Dias estudados = os registrados + os dias em que alguma conversa foi atualizada
-// (assim quem já usava o app antes dessa função também vê a sua sequência)
-function diasEstudados(userId, conversas) {
-  const dias = carregarDias(userId);
-  conversas.forEach((c) => {
-    if (c.mensagens?.some((m) => m.autor === 'usuario')) dias.add(paraDia(c.atualizadaEm));
-  });
-  return dias;
-}
-
-export function calcularSequencia(userId, conversas) {
-  const dias = diasEstudados(userId, conversas);
+// dias: lista de "aaaa-mm-dd" vinda da API
+export function calcularSequencia(diasEstudados = []) {
+  const dias = new Set(diasEstudados);
   const hoje = new Date();
 
   // A sequência continua valendo se a pessoa estudou ontem e ainda não estudou hoje
@@ -92,4 +79,16 @@ export function calcularSequencia(userId, conversas) {
   });
 
   return { sequencia, estudouHoje: dias.has(paraDia(hoje)), semana };
+}
+
+// Média de acertos e tópicos mais errados de uma matéria, a partir dos resultados da API
+export function resumoDaMateria(resultados = [], materia) {
+  const daMateria = resultados.filter((r) => r.materia === materia);
+  const media = daMateria.length
+    ? Math.round(daMateria.reduce((soma, r) => soma + r.percentual, 0) / daMateria.length)
+    : null;
+  const contagem = {};
+  daMateria.forEach((r) => (r.topicosErrados || []).forEach((t) => (contagem[t] = (contagem[t] || 0) + 1)));
+  const topicos = Object.entries(contagem).sort((a, b) => b[1] - a[1]);
+  return { resultados: daMateria, media, topicos };
 }

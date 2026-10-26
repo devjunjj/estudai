@@ -2,23 +2,19 @@ import { useNavigate, Link } from 'react-router-dom';
 import { ChevronRight, MessageCirclePlus } from 'lucide-react';
 import AppLayout from '../components/AppLayout';
 import Sequencia from '../components/Sequencia';
-import { calcularSequencia, classeMateria, siglaMateria } from '../lib/estudos';
-import { listarResultados } from '../lib/performanceStore';
+import { calcularSequencia, classeMateria, resumoDaMateria, siglaMateria } from '../lib/estudos';
 import { abrirConversa } from '../lib/navegacao';
 import { tituloConversa } from '../lib/formatacao';
 
 // Uma entrada por matéria: a conversa mais recente e a média nos exercícios
-function agruparMaterias(userId, conversas) {
+function agruparMaterias(conversas, resultados) {
   const porMateria = new Map();
   conversas.forEach((c) => {
     const chave = c.materia.trim().toLowerCase();
     if (!porMateria.has(chave)) porMateria.set(chave, c); // a lista já vem da mais recente para a mais antiga
   });
   return [...porMateria.values()].map((conversa) => {
-    const resultados = listarResultados(userId, conversa.materia);
-    const media = resultados.length
-      ? Math.round(resultados.reduce((soma, r) => soma + r.percentual, 0) / resultados.length)
-      : null;
+    const { media } = resumoDaMateria(resultados, conversa.materia);
     return { conversa, media };
   });
 }
@@ -27,10 +23,10 @@ function ConteudoInicio({ usuario }) {
   const navigate = useNavigate();
   if (usuario.carregando) return null;
 
-  const { userId, conversas } = usuario;
+  const { conversas, resultados, dias } = usuario;
   const ultima = conversas[0];
-  const materias = agruparMaterias(userId, conversas);
-  const sequencia = calcularSequencia(userId, conversas);
+  const materias = agruparMaterias(conversas, resultados);
+  const sequencia = calcularSequencia(dias);
 
   return (
     <div className="pagina">

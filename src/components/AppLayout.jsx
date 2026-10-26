@@ -3,7 +3,7 @@ import { ChartColumn, House, LogOut, MessageCircle, Moon, Plus, Sparkles, Sun, U
 import { useEffect, useState } from 'react';
 import { acordarApi } from '../lib/api';
 import { supabase } from '../lib/supabaseClient';
-import { useUsuario } from '../lib/useUsuario';
+import { limparDadosDoUsuario, useUsuario } from '../lib/useUsuario';
 import { calcularSequencia, classeMateria } from '../lib/estudos';
 import { tituloConversa } from '../lib/formatacao';
 import { abrirConversa } from '../lib/navegacao';
@@ -40,6 +40,7 @@ export function BotaoTema() {
 export function BotaoSair() {
   const navigate = useNavigate();
   async function sair() {
+    limparDadosDoUsuario();
     await supabase.auth.signOut();
     navigate('/login');
   }
@@ -58,7 +59,7 @@ function MenuLateral({ usuario }) {
   const navigate = useNavigate();
   const { id: conversaAtiva } = useParams();
   const recentes = usuario.conversas.slice(0, 8);
-  const sequencia = usuario.userId ? calcularSequencia(usuario.userId, usuario.conversas) : null;
+  const sequencia = usuario.carregando ? null : calcularSequencia(usuario.dias);
 
   return (
     <aside className="menu-lateral">
@@ -154,6 +155,14 @@ export default function AppLayout({ children, semAbasNoCelular = false }) {
     <div className="app">
       <MenuLateral usuario={usuario} />
       <main className={semAbasNoCelular ? 'app-conteudo sem-abas' : 'app-conteudo'}>
+        {usuario.erro && (
+          <div className="aviso-erro" role="alert">
+            <span>Não foi possível carregar seus dados: {usuario.erro}</span>
+            <button type="button" className="btn btn-secundario" onClick={usuario.recarregar}>
+              Tentar de novo
+            </button>
+          </div>
+        )}
         {typeof children === 'function' ? children(usuario) : children}
       </main>
       {!semAbasNoCelular && <Abas />}

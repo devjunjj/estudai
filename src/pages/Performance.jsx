@@ -2,8 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ChartColumn } from 'lucide-react';
 import AppLayout from '../components/AppLayout';
-import { classeMateria } from '../lib/estudos';
-import { listarResultados } from '../lib/performanceStore';
+import { classeMateria, resumoDaMateria } from '../lib/estudos';
 
 function nivel(percentual) {
   if (percentual >= 70) return '';
@@ -36,14 +35,12 @@ function PainelDesempenho({ usuario }) {
     );
   }
 
-  const resultados = listarResultados(usuario.userId, materia);
+  const resumo = resumoDaMateria(usuario.resultados, materia);
+  const resultados = resumo.resultados;
   const total = resultados.length;
-  const media = total ? Math.round(resultados.reduce((s, r) => s + r.percentual, 0) / total) : 0;
+  const media = resumo.media ?? 0;
   const melhor = total ? Math.max(...resultados.map((r) => r.percentual)) : 0;
-
-  const contagem = {};
-  resultados.forEach((r) => (r.topicosErrados || []).forEach((t) => (contagem[t] = (contagem[t] || 0) + 1)));
-  const focar = Object.entries(contagem).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const focar = resumo.topicos.slice(0, 5);
 
   function escolher(m) {
     setMateria(m);

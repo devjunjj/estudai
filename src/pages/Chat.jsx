@@ -19,10 +19,9 @@ import Gaveta from '../components/Gaveta';
 import NotesPanel from '../components/NotesPanel';
 import { askStudyAssistant, explainAudio, summarizeText } from '../lib/aiClient';
 import { notasApi } from '../lib/api';
-import { carregarConversa, salvarEstilo, salvarMensagens } from '../lib/conversationsStore';
-import { classeMateria, registrarDiaDeEstudo } from '../lib/estudos';
+import { conversasApi } from '../lib/api';
+import { classeMateria, registrarDiaDeEstudo, resumoDaMateria } from '../lib/estudos';
 import { tituloConversa } from '../lib/formatacao';
-import { listarResultados } from '../lib/performanceStore';
 import { useMediaQuery } from '../lib/useMediaQuery';
 import {
   ESTILOS,
@@ -52,8 +51,8 @@ function mensagemInicial(materia) {
 }
 
 // Resumo do desempenho na matéria, mostrado no painel lateral do PC
-function ResumoDesempenho({ userId, materia, onPraticar }) {
-  const resultados = listarResultados(userId, materia);
+function ResumoDesempenho({ resultados: todos, materia, onPraticar }) {
+  const { resultados, media, topicos } = resumoDaMateria(todos, materia);
 
   if (resultados.length === 0) {
     return (
@@ -67,13 +66,7 @@ function ResumoDesempenho({ userId, materia, onPraticar }) {
     );
   }
 
-  const media = Math.round(resultados.reduce((soma, r) => soma + r.percentual, 0) / resultados.length);
-  const contagem = {};
-  resultados.forEach((r) => (r.topicosErrados || []).forEach((t) => (contagem[t] = (contagem[t] || 0) + 1)));
-  const revisar = Object.entries(contagem)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3)
-    .map(([t]) => t);
+  const revisar = topicos.slice(0, 3).map(([t]) => t);
 
   return (
     <section className="resumo-desempenho">
@@ -101,18 +94,57 @@ function ResumoDesempenho({ userId, materia, onPraticar }) {
   );
 }
 
-function ConversaDeEstudo({ userId, conversaId }) {
+// Salva na API em fila: um pedido por vez, sempre com a lista mais recente.
+// Assim duas respostas seguidas nunca chegam fora de ordem no servidor.
+function criarFilaDeSalvamento(conversaId) {
+  let pendente = null;
+  let salvando = false;
+
+  async function processar() {
+    salvando = true;
+    while (pendente) {
+      const lista = pendente;
+      pendente = null;
+      try {
+        await conversasApi.salvarMensagens(conversaId, lista);
+        window.dispatchEvent(new Event('estudai:conversas'));
+      } catch {
+        // sem internet: a próxima mensagem tenta salvar tudo de novo
+      }
+    }
+    salvando = false;
+  }
+
+  return (lista) => {
+    pendente = lista;
+    if (!salvando) processar();
+  };
+}
+
+function paraApi(m) {
+  return {
+    autor: m.autor,
+    texto: m.texto ?? '',
+    anexo: Boolean(m.anexo),
+    erro: Boolean(m.erro),
+    sugestoes: m.sugestoes?.length ? m.sugestoes : null,
+  };
+}
+
+function ConversaDeEstudo({ usuario, conversa }) {
+  const { userId } = usuario;
+  const conversaId = conversa.id;
   const navigate = useNavigate();
   const fimRef = useRef(null);
   const campoRef = useRef(null);
   const arquivoTextoRef = useRef(null);
   const arquivoAudioRef = useRef(null);
 
-  const [conversa] = useState(() => carregarConversa(userId, conversaId));
+  const [salvar] = useState(() => criarFilaDeSalvamento(conversaId));
   const [mensagens, setMensagens] = useState(() =>
-    conversa?.mensagens.length ? conversa.mensagens : conversa ? [mensagemInicial(conversa.materia)] : []
+    conversa.mensagens.length ? conversa.mensagens : [mensagemInicial(conversa.materia)]
   );
-  const [estilo, setEstilo] = useState(conversa?.estilo);
+  const [estilo, setEstilo] = useState(conversa.estilo);
   const [input, setInput] = useState('');
   const [carregando, setCarregando] = useState(false);
   const [notasAbertas, setNotasAbertas] = useState(false);
@@ -121,12 +153,7 @@ function ConversaDeEstudo({ userId, conversaId }) {
   const telaGrande = useMediaQuery('(min-width: 1200px)');
   const telaMedia = useMediaQuery('(min-width: 768px)');
 
-  const materia = conversa?.materia;
-
-  // Conversa inexistente (link antigo, outro navegador): volta para o início
-  useEffect(() => {
-    if (!conversa) navigate('/', { replace: true });
-  }, [conversa, navigate]);
+  const materia = conversa.materia;
 
   useEffect(() => {
     fimRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -134,7 +161,6 @@ function ConversaDeEstudo({ userId, conversaId }) {
 
   // Veio do resultado dos exercícios com uma pergunta pendente ("me ensine o que errei")
   useEffect(() => {
-    if (!conversa) return;
     const pendente = sessionStorage.getItem('estudai_pergunta_pendente');
     if (!pendente) return;
     sessionStorage.removeItem('estudai_pergunta_pendente');
@@ -142,12 +168,10 @@ function ConversaDeEstudo({ userId, conversaId }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (!conversa) return null;
-
   function atualizarMensagens(novaLista) {
     setMensagens(novaLista);
     // a mensagem de boas-vindas é só visual, não precisa ser salva
-    salvarMensagens(userId, conversaId, novaLista.filter((m) => !m.boasVindas));
+    salvar(novaLista.filter((m) => !m.boasVindas).map(paraApi));
   }
 
   async function responder(historico, estiloDaResposta = estilo) {
@@ -165,7 +189,7 @@ function ConversaDeEstudo({ userId, conversaId }) {
   function perguntar(texto) {
     const limpo = texto.trim();
     if (!limpo || carregando) return;
-    registrarDiaDeEstudo(userId);
+    registrarDiaDeEstudo();
     setAvisoNota('');
     const historico = [...mensagens, { autor: 'usuario', texto: limpo }];
     atualizarMensagens(historico);
@@ -195,7 +219,7 @@ function ConversaDeEstudo({ userId, conversaId }) {
 
   function trocarEstilo(novoEstilo) {
     setEstilo(novoEstilo);
-    salvarEstilo(userId, conversaId, novoEstilo);
+    conversasApi.salvarEstilo(conversaId, novoEstilo).catch(() => {});
     salvarEstiloPreferido(userId, novoEstilo);
   }
 
@@ -226,7 +250,7 @@ function ConversaDeEstudo({ userId, conversaId }) {
     const arquivo = e.target.files?.[0];
     e.target.value = '';
     if (!arquivo || carregando) return;
-    registrarDiaDeEstudo(userId);
+    registrarDiaDeEstudo();
 
     const conteudo = await arquivo.text();
     const comAnexo = [...mensagens, { autor: 'usuario', texto: `Enviou o texto "${arquivo.name}" para resumir.`, anexo: true }];
@@ -246,7 +270,7 @@ function ConversaDeEstudo({ userId, conversaId }) {
     const arquivo = e.target.files?.[0];
     e.target.value = '';
     if (!arquivo || carregando) return;
-    registrarDiaDeEstudo(userId);
+    registrarDiaDeEstudo();
 
     const comAnexo = [...mensagens, { autor: 'usuario', texto: `Enviou o áudio "${arquivo.name}" para explicar.`, anexo: true }];
     atualizarMensagens(comAnexo);
@@ -427,7 +451,7 @@ function ConversaDeEstudo({ userId, conversaId }) {
       {telaGrande && (
         <aside className="painel-chat" aria-label="Anotações e desempenho">
           <NotesPanel userId={userId} materia={materia} versao={versaoNotas} />
-          <ResumoDesempenho userId={userId} materia={materia} onPraticar={abrirExercicios} />
+          <ResumoDesempenho resultados={usuario.resultados} materia={materia} onPraticar={abrirExercicios} />
         </aside>
       )}
 
@@ -439,12 +463,63 @@ function ConversaDeEstudo({ userId, conversaId }) {
   );
 }
 
+// Busca a conversa na API antes de abrir (assim ela aparece igual no celular e no PC)
+function CarregarConversa({ usuario, conversaId }) {
+  const navigate = useNavigate();
+  const [estado, setEstado] = useState({ conversa: null, erro: '' });
+
+  useEffect(() => {
+    let ativo = true;
+    setEstado({ conversa: null, erro: '' });
+    conversasApi
+      .obter(conversaId)
+      .then((conversa) => ativo && setEstado({ conversa, erro: '' }))
+      .catch((falha) => {
+        if (!ativo) return;
+        // Conversa que não existe mais (ou link de outra conta): volta para o início
+        if (falha.status === 404 || falha.status === 400) navigate('/', { replace: true });
+        else setEstado({ conversa: null, erro: falha.message });
+      });
+    return () => {
+      ativo = false;
+    };
+  }, [conversaId, navigate]);
+
+  if (estado.erro) {
+    return (
+      <div className="carregando-conversa">
+        <div className="aviso-erro" role="alert" style={{ margin: 0 }}>
+          <span>{estado.erro}</span>
+          <button type="button" className="btn btn-secundario" onClick={() => navigate(0)}>
+            Tentar de novo
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!estado.conversa) {
+    return (
+      <div className="carregando-conversa" role="status">
+        <div className="indicador-pensando">
+          Abrindo conversa
+          <span className="pontos-pensando" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  return <ConversaDeEstudo key={conversaId} usuario={usuario} conversa={estado.conversa} />;
+}
+
 export default function Chat({ conversaId }) {
   return (
     <AppLayout semAbasNoCelular>
-      {(usuario) =>
-        usuario.carregando ? null : <ConversaDeEstudo userId={usuario.userId} conversaId={conversaId} />
-      }
+      {(usuario) => (usuario.carregando ? null : <CarregarConversa usuario={usuario} conversaId={conversaId} />)}
     </AppLayout>
   );
 }

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { BookOpen, LogOut, Moon, Scale, Sun, Zap } from 'lucide-react';
 import AppLayout from '../components/AppLayout';
 import { supabase } from '../lib/supabaseClient';
+import { limparDadosDoUsuario } from '../lib/useUsuario';
 import { definirTema, temaAtualEhEscuro } from '../lib/theme';
 import { ESTILOS, ORDEM_ESTILOS, carregarEstiloPreferido, salvarEstiloPreferido } from '../lib/preferencias';
 
@@ -24,6 +25,7 @@ function ConteudoConta({ usuario }) {
   }
 
   async function sair() {
+    limparDadosDoUsuario();
     await supabase.auth.signOut();
     navigate('/login');
   }

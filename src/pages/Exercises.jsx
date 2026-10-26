@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Check, GraduationCap, RotateCcw, X } from 'lucide-react';
 import AppLayout from '../components/AppLayout';
 import { gerarExercicios } from '../lib/aiClient';
+import { resultadosApi } from '../lib/api';
 import { classeMateria, registrarDiaDeEstudo } from '../lib/estudos';
-import { registrarResultado } from '../lib/performanceStore';
 
 const LETRAS = ['A', 'B', 'C', 'D', 'E'];
 
@@ -28,7 +28,7 @@ function Topo({ materia }) {
   );
 }
 
-function Rodada({ userId, materia, contexto, onNovaRodada }) {
+function Rodada({ materia, contexto, onNovaRodada }) {
   const navigate = useNavigate();
   const [exercicios, setExercicios] = useState(null);
   const [carregando, setCarregando] = useState(true);
@@ -77,7 +77,6 @@ function Rodada({ userId, materia, contexto, onNovaRodada }) {
   if (finalizado) {
     return (
       <Resultado
-        userId={userId}
         materia={materia}
         respostas={respostas}
         onRefazer={onNovaRodada}
@@ -172,7 +171,7 @@ function Rodada({ userId, materia, contexto, onNovaRodada }) {
   );
 }
 
-function Resultado({ userId, materia, respostas, onRefazer, onVoltar, onRevisar }) {
+function Resultado({ materia, respostas, onRefazer, onVoltar, onRevisar }) {
   const total = respostas.length;
   const acertos = respostas.filter((r) => r.acertou).length;
   const erros = total - acertos;
@@ -180,8 +179,11 @@ function Resultado({ userId, materia, respostas, onRefazer, onVoltar, onRevisar 
   const topicosParaFocar = [...new Set(respostas.filter((r) => !r.acertou).map((r) => r.topico).filter(Boolean))];
 
   useEffect(() => {
-    registrarResultado(userId, materia, { total, acertos, topicosErrados: topicosParaFocar });
-    registrarDiaDeEstudo(userId);
+    resultadosApi
+      .registrar(materia, total, acertos, topicosParaFocar)
+      .then(() => window.dispatchEvent(new Event('estudai:resultados')))
+      .catch(() => {}); // sem internet: a rodada aparece na tela, só não entra no histórico
+    registrarDiaDeEstudo();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -228,7 +230,7 @@ function Resultado({ userId, materia, respostas, onRefazer, onVoltar, onRevisar 
   );
 }
 
-function PaginaExercicios({ userId }) {
+function PaginaExercicios() {
   const navigate = useNavigate();
   const materia = localStorage.getItem('estudai_materia');
   const contexto = sessionStorage.getItem('estudai_exercicios_contexto') || '';
@@ -243,7 +245,7 @@ function PaginaExercicios({ userId }) {
   return (
     <div className="pagina estreita">
       <Topo materia={materia} />
-      <Rodada key={rodada} userId={userId} materia={materia} contexto={contexto} onNovaRodada={() => setRodada((r) => r + 1)} />
+      <Rodada key={rodada} materia={materia} contexto={contexto} onNovaRodada={() => setRodada((r) => r + 1)} />
     </div>
   );
 }
@@ -251,7 +253,7 @@ function PaginaExercicios({ userId }) {
 export default function Exercises() {
   return (
     <AppLayout semAbasNoCelular>
-      {(usuario) => (usuario.carregando ? null : <PaginaExercicios userId={usuario.userId} />)}
+      {(usuario) => (usuario.carregando ? null : <PaginaExercicios />)}
     </AppLayout>
   );
 }

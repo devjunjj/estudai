@@ -2207,3 +2207,26 @@ textarea.campo-texto {
   padding: 6px 14px;
   border: 1px solid var(--azul-borda);
 }
+
+.aviso-erro {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 16px 20px 0;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: var(--perigo-fundo);
+  color: var(--perigo);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.carregando-conversa {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+}

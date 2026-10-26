@@ -22,6 +22,99 @@ namespace EstudAI.Api.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("EstudAI.Api.Models.Conversa", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("AtualizadaEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CriadaEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Estilo")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Materia")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("OrigemLocalId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "AtualizadaEm");
+
+                    b.HasIndex("UserId", "OrigemLocalId")
+                        .IsUnique();
+
+                    b.ToTable("Conversas");
+                });
+
+            modelBuilder.Entity("EstudAI.Api.Models.DiaEstudo", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateOnly>("Dia")
+                        .HasColumnType("date");
+
+                    b.HasKey("UserId", "Dia");
+
+                    b.ToTable("DiasEstudo");
+                });
+
+            modelBuilder.Entity("EstudAI.Api.Models.Mensagem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("Anexo")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Autor")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<Guid>("ConversaId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("Erro")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Ordem")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Sugestoes")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Texto")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConversaId", "Ordem");
+
+                    b.ToTable("Mensagens");
+                });
+
             modelBuilder.Entity("EstudAI.Api.Models.Note", b =>
                 {
                     b.Property<Guid>("Id")
@@ -54,6 +147,66 @@ namespace EstudAI.Api.Migrations
                     b.HasIndex("UserId", "Materia");
 
                     b.ToTable("Notes");
+                });
+
+            modelBuilder.Entity("EstudAI.Api.Models.ResultadoExercicio", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Acertos")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("Data")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Materia")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("OrigemLocalId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("Percentual")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TopicosErrados")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Total")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "Materia");
+
+                    b.HasIndex("UserId", "OrigemLocalId")
+                        .IsUnique();
+
+                    b.ToTable("ResultadosExercicios");
+                });
+
+            modelBuilder.Entity("EstudAI.Api.Models.Mensagem", b =>
+                {
+                    b.HasOne("EstudAI.Api.Models.Conversa", null)
+                        .WithMany("Mensagens")
+                        .HasForeignKey("ConversaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("EstudAI.Api.Models.Conversa", b =>
+                {
+                    b.Navigation("Mensagens");
                 });
 #pragma warning restore 612, 618
         }

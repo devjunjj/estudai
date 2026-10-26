@@ -18,10 +18,7 @@ function ListaDeConversas({ usuario }) {
   const visiveis = usuario.conversas.filter((c) => {
     if (filtro && c.materia !== filtro) return false;
     if (!termo) return true;
-    return (
-      c.materia.toLowerCase().includes(termo) ||
-      c.mensagens.some((m) => m.texto?.toLowerCase().includes(termo))
-    );
+    return [c.materia, c.titulo, c.ultimaMensagem].some((t) => t?.toLowerCase().includes(termo));
   });
 
   return (

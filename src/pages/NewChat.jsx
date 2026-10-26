@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BookOpen, Scale, Zap } from 'lucide-react';
 import AppLayout from '../components/AppLayout';
-import { criarConversa } from '../lib/conversationsStore';
+import { conversasApi } from '../lib/api';
 import { abrirConversa } from '../lib/navegacao';
 import { ESTILOS, ORDEM_ESTILOS, carregarEstiloPreferido, salvarEstiloPreferido } from '../lib/preferencias';
 
@@ -13,18 +13,26 @@ function FormularioNovaConversa({ usuario }) {
   const [materia, setMateria] = useState('');
   const [estilo, setEstilo] = useState(() => carregarEstiloPreferido(usuario.userId));
   const [criando, setCriando] = useState(false);
+  const [erro, setErro] = useState('');
 
   const materiasRecentes = [...new Set(usuario.conversas.map((c) => c.materia))].slice(0, 6);
 
-  function comecar(e) {
+  async function comecar(e) {
     e.preventDefault();
     const nome = materia.trim();
     if (!nome || criando) return;
     setCriando(true);
+    setErro('');
 
     salvarEstiloPreferido(usuario.userId, estilo); // da próxima vez já vem marcado
-    const conversa = criarConversa(usuario.userId, nome, estilo);
-    abrirConversa(navigate, conversa);
+    try {
+      const conversa = await conversasApi.criar(nome, estilo);
+      window.dispatchEvent(new Event('estudai:conversas'));
+      abrirConversa(navigate, conversa);
+    } catch (falha) {
+      setErro(falha.message);
+      setCriando(false);
+    }
   }
 
   return (
@@ -86,6 +94,8 @@ function FormularioNovaConversa({ usuario }) {
       <p className="texto-suave" style={{ margin: '-8px 0 0', fontSize: 13 }}>
         Dá para mudar a qualquer momento durante a conversa.
       </p>
+
+      {erro && <p className="mensagem-erro" role="alert">{erro}</p>}
 
       <button type="submit" className="btn btn-primario btn-bloco" disabled={!materia.trim() || criando}>
         {criando ? 'Abrindo…' : 'Começar a estudar'}

@@ -80,7 +80,9 @@ async function requisicao(caminho, { metodo = 'GET', corpo } = {}) {
   if (!resposta.ok) {
     // a API manda { mensagem } nos erros que ela mesma trata (ex.: IA fora do ar)
     const corpo = await resposta.json().catch(() => null);
-    throw new Error(corpo?.mensagem ?? `Erro na API: ${resposta.status}`);
+    const erro = new Error(corpo?.mensagem ?? `Erro na API: ${resposta.status}`);
+    erro.status = resposta.status; // ex.: 404 = conversa não existe mais
+    throw erro;
   }
 
   // 204 No Content (ex.: DELETE) não tem corpo
@@ -100,4 +102,29 @@ export const notasApi = {
 export const iaApi = {
   gerar: (prompt, arquivo = null) =>
     requisicao('/api/ia/gerar', { metodo: 'POST', corpo: { prompt, arquivo } }),
+};
+
+// Conversas e mensagens (sincronizadas entre celular, tablet e PC)
+export const conversasApi = {
+  listar: () => requisicao('/api/conversas'),
+  obter: (id) => requisicao(`/api/conversas/${id}`),
+  criar: (materia, estilo) => requisicao('/api/conversas', { metodo: 'POST', corpo: { materia, estilo } }),
+  salvarMensagens: (id, mensagens) =>
+    requisicao(`/api/conversas/${id}/mensagens`, { metodo: 'PUT', corpo: { mensagens } }),
+  salvarEstilo: (id, estilo) => requisicao(`/api/conversas/${id}/estilo`, { metodo: 'PUT', corpo: { estilo } }),
+  importar: (conversas) => requisicao('/api/conversas/importar', { metodo: 'POST', corpo: { conversas } }),
+};
+
+// Resultados dos exercícios (tela de Desempenho)
+export const resultadosApi = {
+  listar: () => requisicao('/api/resultados'),
+  registrar: (materia, total, acertos, topicosErrados) =>
+    requisicao('/api/resultados', { metodo: 'POST', corpo: { materia, total, acertos, topicosErrados } }),
+  importar: (resultados) => requisicao('/api/resultados/importar', { metodo: 'POST', corpo: { resultados } }),
+};
+
+// Dias estudados (sequência de dias seguidos)
+export const estudosApi = {
+  listarDias: () => requisicao('/api/estudos/dias'),
+  registrarDias: (dias) => requisicao('/api/estudos/dias', { metodo: 'POST', corpo: { dias } }),
 };
