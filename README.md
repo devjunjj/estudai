@@ -26,6 +26,7 @@ Aplicação full stack: frontend em React (PWA instalável no celular) e API em 
 | IA | Google Gemini API |
 | Proxy da IA | Função serverless na Vercel (`/api/gemini`) |
 | PWA | vite-plugin-pwa |
+| Testes | xUnit, WebApplicationFactory, EF Core InMemory |
 | Qualidade | Oxlint |
 
 ## Arquitetura
@@ -58,6 +59,9 @@ backend/EstudAI.Api/
   Dtos/                  contratos de entrada e saída, com validação
   Data/                  AppDbContext (Entity Framework Core)
   Migrations/            histórico de alterações do banco
+backend/EstudAI.Api.Tests/
+  NotesControllerTests.cs  testes de integração da API
+  Infra/                 API em memória para os testes (banco e login de teste)
 api/
   gemini.js              função serverless (proxy seguro para o Gemini)
 src/
@@ -104,13 +108,22 @@ npm run dev
 
 Acesse http://localhost:5173, crie uma conta e escolha uma matéria.
 
+## Testes
+
+```bash
+cd backend
+dotnet test
+```
+
+São testes de integração com xUnit: a API sobe inteira em memória (`WebApplicationFactory`), com banco em memória e um login de teste no lugar do Supabase, e cada teste faz requisições HTTP de verdade. Eles cobrem acesso sem login (401), validação (400), criação, edição e exclusão, filtro por matéria e, principalmente, o isolamento entre usuários: um aluno não consegue ver nem apagar a nota de outro.
+
 ## Próximos passos
 
 - [x] API própria em **C# / ASP.NET Core** com CRUD de anotações
 - [x] Banco de dados **PostgreSQL** com Entity Framework Core e migrations
 - [ ] Migrar conversas e desempenho do `localStorage` para a API
 - [x] Autenticação na API com o token JWT do Supabase
-- [ ] Testes automatizados (xUnit no backend)
+- [x] Testes de integração da API com xUnit
 - [ ] Docker e deploy em nuvem
 
 ## Autor

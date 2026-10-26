@@ -9,11 +9,15 @@ var builder = WebApplication.CreateBuilder(args);
 // ---------- Banco de dados ----------
 // PostgreSQL via Entity Framework Core. A connection string NÃO fica no código
 // nem no appsettings.json: em desenvolvimento ela vem do "user-secrets".
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? throw new InvalidOperationException(
-        "Connection string 'DefaultConnection' não configurada. Use: dotnet user-secrets set \"ConnectionStrings:DefaultConnection\" \"...\"");
-
-builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
+// A connection string só é lida quando o banco é usado de fato, o que permite
+// aos testes trocar o PostgreSQL por um banco em memória.
+builder.Services.AddDbContext<AppDbContext>(options =>
+{
+    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+        ?? throw new InvalidOperationException(
+            "Connection string 'DefaultConnection' não configurada. Use: dotnet user-secrets set \"ConnectionStrings:DefaultConnection\" \"...\"");
+    options.UseNpgsql(connectionString);
+});
 
 // ---------- Autenticação (JWT do Supabase) ----------
 // O login acontece no Supabase, que devolve um token JWT assinado.
@@ -23,17 +27,20 @@ var supabaseUrl = builder.Configuration["Supabase:Url"]
     ?? throw new InvalidOperationException("Configuração 'Supabase:Url' ausente no appsettings.json.");
 var emissorToken = $"{supabaseUrl.TrimEnd('/')}/auth/v1";
 
-IList<SecurityKey> chavesSupabase;
-using (var http = new HttpClient())
+// As chaves são baixadas uma vez, quando chega o primeiro token (Lazy),
+// e não na inicialização: assim a API (e os testes) sobem sem depender da internet.
+var chavesSupabase = new Lazy<IList<SecurityKey>>(() =>
 {
+    using var http = new HttpClient();
     var jwks = http.GetStringAsync($"{emissorToken}/.well-known/jwks.json").GetAwaiter().GetResult();
-    chavesSupabase = new JsonWebKeySet(jwks).GetSigningKeys();
-}
-if (chavesSupabase.Count == 0)
-{
-    throw new InvalidOperationException(
-        "O Supabase não retornou chaves públicas (JWKS). Verifique se o projeto usa JWT Signing Keys assimétricas.");
-}
+    var chaves = new JsonWebKeySet(jwks).GetSigningKeys();
+    if (chaves.Count == 0)
+    {
+        throw new InvalidOperationException(
+            "O Supabase não retornou chaves públicas (JWKS). Verifique se o projeto usa JWT Signing Keys assimétricas.");
+    }
+    return chaves;
+}, LazyThreadSafetyMode.PublicationOnly); // se falhar (ex.: sem internet), tenta de novo na próxima requisição
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -50,7 +57,8 @@ builder.Services
             ValidAudience = "authenticated",     // e ser de um usuário logado
             ValidateLifetime = true,             // e não pode estar expirado
             ValidateIssuerSigningKey = true,
-            IssuerSigningKeys = chavesSupabase,  // e a assinatura tem que bater com a chave pública
+            // e a assinatura tem que bater com a chave pública do Supabase
+            IssuerSigningKeyResolver = (_, _, _, _) => chavesSupabase.Value,
         };
     });
 
@@ -109,3 +117,6 @@ app.UseAuthorization();  // 2º: decide se ele PODE acessar o endpoint
 app.MapControllers();
 
 app.Run();
+
+// Torna a classe Program visível para o projeto de testes (WebApplicationFactory<Program>)
+public partial class Program { }

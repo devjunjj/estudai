@@ -5,6 +5,8 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EstudAI.Api", "EstudAI.Api\EstudAI.Api.csproj", "{2ED987B3-D91F-40FB-AC1A-F12881E813F2}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EstudAI.Api.Tests", "EstudAI.Api.Tests\EstudAI.Api.Tests.csproj", "{7808ADBA-790A-4707-8FE8-B2ABF96AF0EE}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -18,5 +20,9 @@ Global
 		{2ED987B3-D91F-40FB-AC1A-F12881E813F2}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2ED987B3-D91F-40FB-AC1A-F12881E813F2}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2ED987B3-D91F-40FB-AC1A-F12881E813F2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7808ADBA-790A-4707-8FE8-B2ABF96AF0EE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7808ADBA-790A-4707-8FE8-B2ABF96AF0EE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7808ADBA-790A-4707-8FE8-B2ABF96AF0EE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7808ADBA-790A-4707-8FE8-B2ABF96AF0EE}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
