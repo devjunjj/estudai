@@ -8,6 +8,7 @@ import NewChat from './pages/NewChat';
 import Chat from './pages/Chat';
 import Exercises from './pages/Exercises';
 import Performance from './pages/Performance';
+import Conta from './pages/Conta';
 
 function RotaPrivada({ sessao, carregando, children }) {
   if (carregando) return null; // evita "piscar" a tela de login antes de checar
@@ -60,6 +61,7 @@ export default function App() {
         <Route path="/chat" element={privada(<UltimoChat />)} />
         <Route path="/exercicios" element={privada(<Exercises />)} />
         <Route path="/desempenho" element={privada(<Performance />)} />
+        <Route path="/conta" element={privada(<Conta />)} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

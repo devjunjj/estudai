@@ -329,7 +329,7 @@ button:disabled {
   bottom: 0;
   z-index: 30;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   align-items: center;
   height: calc(var(--altura-abas) + env(safe-area-inset-bottom));
   padding: 0 8px env(safe-area-inset-bottom);
@@ -353,6 +353,7 @@ button:disabled {
   text-decoration: none;
   font-size: 11px;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .aba.ativo {
@@ -2112,4 +2113,82 @@ textarea.campo-texto {
 
 .opcoes-estilo legend {
   padding: 0;
+}
+
+.usuario-link {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  border-radius: var(--raio-sm);
+  color: var(--texto);
+  text-decoration: none;
+}
+
+.usuario-link:hover .usuario-email {
+  color: var(--azul-forte);
+}
+
+/* ---------- Conta ---------- */
+.conta-perfil {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.conta-perfil .avatar {
+  width: 52px;
+  height: 52px;
+  font-size: 18px;
+}
+
+.conta-email {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.conta-secao {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.alternador {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.alternador.tres {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.alternador button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 72px;
+  padding: 10px 6px;
+  border-radius: 14px;
+  border: 1.5px solid var(--borda-forte);
+  background: var(--superficie);
+  color: var(--texto-2);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.alternador button[aria-pressed='true'] {
+  border-color: var(--azul);
+  background: var(--azul-claro);
+  color: var(--azul-forte);
+}
+
+.btn-sair {
+  color: var(--perigo);
 }

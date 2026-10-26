@@ -7,3 +7,8 @@ export function alternarTema() {
 export function temaAtualEhEscuro() {
   return document.documentElement.classList.contains('dark');
 }
+
+export function definirTema(escuro) {
+  document.documentElement.classList.toggle('dark', escuro);
+  localStorage.setItem('estudai_tema', escuro ? 'dark' : 'light');
+}

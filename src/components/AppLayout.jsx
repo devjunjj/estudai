@@ -1,5 +1,5 @@
 import { NavLink, useNavigate, useParams } from 'react-router-dom';
-import { ChartColumn, House, LogOut, MessageCircle, Moon, Plus, Sparkles, Sun } from 'lucide-react';
+import { ChartColumn, House, LogOut, MessageCircle, Moon, Plus, Sparkles, Sun, UserRound } from 'lucide-react';
 import { useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useUsuario } from '../lib/useUsuario';
@@ -104,8 +104,10 @@ function MenuLateral({ usuario }) {
       <div className="menu-rodape" style={{ marginTop: recentes.length > 0 ? 0 : 'auto' }}>
         {sequencia && <Sequencia dados={sequencia} variante="compacta" />}
         <div className="usuario">
-          <span className="avatar" aria-hidden="true">{usuario.email.slice(0, 2) || '?'}</span>
-          <span className="usuario-email" title={usuario.email}>{usuario.email}</span>
+          <NavLink to="/conta" className="usuario-link" title="Minha conta">
+            <span className="avatar" aria-hidden="true">{usuario.email.slice(0, 2) || '?'}</span>
+            <span className="usuario-email">{usuario.email}</span>
+          </NavLink>
           <BotaoTema />
           <BotaoSair />
         </div>
@@ -129,6 +131,9 @@ function Abas() {
       </NavLink>
       <NavLink to="/desempenho" className={classeAba}>
         <ChartColumn size={23} aria-hidden="true" /> Desempenho
+      </NavLink>
+      <NavLink to="/conta" className={classeAba}>
+        <UserRound size={23} aria-hidden="true" /> Conta
       </NavLink>
     </nav>
   );

@@ -1,6 +1,6 @@
 import { useNavigate, Link } from 'react-router-dom';
 import { ChevronRight, MessageCirclePlus } from 'lucide-react';
-import AppLayout, { BotaoSair, BotaoTema } from '../components/AppLayout';
+import AppLayout from '../components/AppLayout';
 import Sequencia from '../components/Sequencia';
 import { calcularSequencia, classeMateria, siglaMateria } from '../lib/estudos';
 import { listarResultados } from '../lib/performanceStore';
@@ -38,10 +38,6 @@ function ConteudoInicio({ usuario }) {
         <div>
           <p className="pagina-subtitulo">Olá!</p>
           <h1 className="pagina-titulo">O que vamos estudar hoje?</h1>
-        </div>
-        <div className="so-celular" style={{ gap: 4 }}>
-          <BotaoTema />
-          <BotaoSair />
         </div>
       </div>
 
